@@ -22,7 +22,7 @@ env:
   GRAILS_PUBLISH_RELEASE: 'true'
 jobs:
   publish:
-    name: "Stage Artifacts for Release"
+    name: "Stage Jar Files"
     permissions:
       contents: write # to stage distributions to the GitHub release page
       issues: write # to modify milestones
@@ -346,7 +346,7 @@ jobs:
           VERSION_COMMIT_ID: ${{ needs.publish.outputs.commit_hash }}
         run: |
           export DIST_SVN_REVISION=$(awk '/Last Changed Rev:/ {print $4}' dev-repo/DIST_SVN_REVISION.txt)
-          
+          echo "::group::Grails PPMC Vote Email"
           echo "*************************************************"
           echo "Subject: [VOTE] Release Apache Grails (incubating) - Gradle Plugin - Grails Publish ${VERSION}"
           echo "*************************************************"
@@ -354,6 +354,7 @@ jobs:
           echo "*************************************************"
           cat grails-publish/.github/vote_templates/staged.txt | envsubst
           echo "*************************************************"
+          echo "::endgroup::"
       - name: '📧 Print Groovy Vote Email'
         env:
           VERSION: ${{ needs.publish.outputs.release_version }}
@@ -361,6 +362,7 @@ jobs:
         run: |
           export DIST_SVN_REVISION=$(awk '/Last Changed Rev:/ {print $4}' dev-repo/DIST_SVN_REVISION.txt)
           
+          echo "::group::Groovy PMC Vote Email"
           echo "*************************************************"
           echo "Subject: [VOTE] Approval of Apache Grails (incubating) - Gradle Plugin - Grails Publish ${VERSION} release by Groovy PMC"
           echo "*************************************************"
@@ -368,25 +370,48 @@ jobs:
           echo "*************************************************"
           cat grails-publish/.github/vote_templates/groovy_pmc.txt | envsubst
           echo "*************************************************"
-      - name: 'Announcement Email'
-        env:
-          VERSION: ${{ needs.publish.outputs.release_version }}
-          VERSION_COMMIT_ID: ${{ needs.publish.outputs.commit_hash }}
-          PREVIOUS_VERSION: 'TODO_PREVIOUS_VERSION'
+          echo "::endgroup::"
+  release:
+    environment: release
+    name: 'VOTE SUCCEEDED - Release Artifacts'
+    needs: [ publish, source, upload ]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: "Output Agent IP" # in the event RAO blocks this agent, this can be used to debug it
+        run: curl -s https://api.ipify.org
+      - name: "Setup SVN and Tools"
+        run: sudo apt-get install -y subversion subversion-tools tree gettext-base
+      - name: "🗳 Grails PPMC Vote Confirmation - MANUAL"
         run: |
-          export DIST_SVN_REVISION=$(awk '/Last Changed Rev:/ {print $4}' dev-repo/DIST_SVN_REVISION.txt)
-          
-          echo "*************************************************"
-          echo "Subject: [ANNOUNCE] Apache Grails (incubating) - Gradle Plugin - Grails Publish ${VERSION}"
-          echo "*************************************************"
-          echo "Body:"
-          echo "*************************************************"
-          cat grails-publish/.github/vote_templates/announce.txt | envsubst
-          echo "*************************************************"
+          echo "::group::Manual Confirmation"
+          echo "🔎 This step is a placeholder that the vote confirmation on dev@grails.apache.org completed successfully."
+          echo "::endgroup::"
+      - name: "🗳 Groovy PMC Vote Confirmation - MANUAL"
+        run: |
+          echo "::group::Manual Confirmation"
+          echo "🔎 This step is a placeholder that the vote confirmation on dev@grails.apache.org completed successfully."
+          echo "::endgroup::"
+      - name: "🚀 Release JAR files - MANUAL"
+        run: |
+          echo "::group::Manual Jar Promotion"
+          echo "Run .github/scripts/releaseJarFiles.sh 'v${{ needs.publish.outputs.release_version }}' '${{ needs.publish.outputs.extract_repository_name }}:${{ needs.publish.outputs.release_version }}' ASF_USER ASF_PASS"
+          echo "::endgroup::"
+      - name: "🚀 Release distribution artifacts - MANUAL"
+        run: |
+          echo "::group::Manual ASF Artifact Promotion"
+          echo "Run github/scripts/releaseDistributions.sh 'v${{ needs.publish.outputs.release_version }}' ASF_USER ASF_PASS"
+          echo "::endgroup::"
+      - name: "✅ Update ASF Reporter - MANUAL"
+        run: |
+          echo "::group::Manual ASF Reporter Update"
+          TODAY=$(date +"%Y-%m-%d")
+          echo "Check email & update https://reporter.apache.org to mark the release ${{ needs.publish.outputs.release_version }} as complete as of ${TODAY}"
+          echo "Note: this is a place holder; currently this is not possible since Groovy sponsors us instead of the incubator PMC"
+          echo "::endgroup::"
   docs:
     environment: docs
-    name: "Publish Documentation"
-    needs: [ publish, source, upload ]
+    name: "VOTE SUCCEEDED - Publish Documentation"
+    needs: [ publish, source, upload ] # TODO Once we have confirmed release won't fail, add it as a dependency here
     runs-on: ubuntu-24.04
     steps:
       - name: "📥 Checkout repository"
@@ -417,10 +442,10 @@ jobs:
           GRADLE_PUBLISH_RELEASE: 'true'
           SOURCE_FOLDER: plugin/build/docs/api
           VERSION: ${{ needs.publish.outputs.release_version }}
-  release:
-    name: "Close Release"
+  close:
+    name: "VOTE SUCCEEDED - Close Release"
     environment: release
-    needs: [ publish, source, upload, docs ]
+    needs: [ publish, source, upload, docs ] # TODO Once we have confirmed release won't fail, add `release` as a dependency here
     runs-on: ubuntu-24.04
     permissions:
       contents: write # required for gradle.properties revert
@@ -445,3 +470,25 @@ jobs:
           develocity-access-key: ${{ secrets.GRAILS_DEVELOCITY_ACCESS_KEY }}
       - name: "⚙️ Run post-release"
         uses: apache/grails-github-actions/post-release@asf
+      - name: '🌎 Create Blog Post - MANUAL'
+        run: |
+          echo "::group::Blog Post Creation - MANUAL"
+          echo "Publish a blog post on https://grails.apache.org/blog/ about the new release ${{ needs.publish.outputs.release_version }} using the repo https://github.com/apache/grails-static-website"
+          echo "::endgroup::"
+      - name: 'Announcement Email'
+        env:
+          VERSION: ${{ needs.publish.outputs.release_version }}
+          VERSION_COMMIT_ID: ${{ needs.publish.outputs.commit_hash }}
+          PREVIOUS_VERSION: 'TODO_PREVIOUS_VERSION'
+        run: |
+          export DIST_SVN_REVISION=$(awk '/Last Changed Rev:/ {print $4}' dev-repo/DIST_SVN_REVISION.txt)
+
+          echo "::group::Announcement Email"
+          echo "*************************************************"
+          echo "Subject: [ANNOUNCE] Apache Grails (incubating) - Gradle Plugin - Grails Publish ${VERSION}"
+          echo "*************************************************"
+          echo "Body:"
+          echo "*************************************************"
+          cat grails-publish/.github/vote_templates/announce.txt | envsubst
+          echo "*************************************************"
+          echo "::endgroup::"
