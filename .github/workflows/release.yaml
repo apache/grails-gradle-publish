@@ -413,6 +413,8 @@ jobs:
     name: "VOTE SUCCEEDED - Publish Documentation"
     needs: [ publish, source, upload ] # TODO Once we have confirmed release won't fail, add it as a dependency here
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write # required gh-pages update
     steps:
       - name: "📥 Checkout repository"
         uses: actions/checkout@v4
