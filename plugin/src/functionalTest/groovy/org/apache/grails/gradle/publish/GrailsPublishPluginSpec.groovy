@@ -653,6 +653,61 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         result.output.contains("Project subproject2 will be a release.")
     }
 
+    def "organization in pom test"() {
+        given:
+        File tempDir = File.createTempDir("organization")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'organization')
+
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask("publish", ["--info", "--stacktrace"], runner)
+
+        then:
+        assertTaskSuccess("sourcesJar", result)
+        assertTaskSuccess("javadocJar", result)
+        assertTaskSuccess("groovydoc", result)
+        assertBuildSuccess(result, ["compileJava", "compileGroovy", "processResources", "classes", "jar", "groovydoc", "javadoc", "javadocJar", "sourcesJar", "grailsPublishValidation", "requireMavenPublishUrl", "generateMetadataFileForMavenPublication", "generatePomFileForMavenPublication", "publishMavenPublicationToMavenLocal", "publishToMavenLocal"])
+
+        !result.output.contains("does not have a version defined. Using the gradle property `projectVersion` to assume version is ")
+        result.output.contains("Environment Variable `GRAILS_PUBLISH_RELEASE` detected - using variable instead of project version.")
+
+        and:
+        Path artifactDir = tempDir.toPath().resolve("org/grails/example/organization/0.0.1-SNAPSHOT")
+        Files.exists(artifactDir)
+        File[] artifacts = artifactDir.toFile().listFiles()
+
+        /*
+        organization-0.0.1-20250212.043425-1.pom.sha1
+        organization-0.0.1-20250212.043425-1.pom.md5
+        organization-0.0.1-20250212.043425-1-javadoc.jar.sha1
+        organization-0.0.1-20250212.043425-1.module.md5
+        organization-0.0.1-20250212.043425-1-sources.jar.md5
+        organization-0.0.1-20250212.043425-1.jar.md5
+        maven-metadata.xml
+        organization-0.0.1-20250212.043425-1.module
+        organization-0.0.1-20250212.043425-1.pom
+        organization-0.0.1-20250212.043425-1.jar.sha1
+        organization-0.0.1-20250212.043425-1-javadoc.jar
+        organization-0.0.1-20250212.043425-1-sources.jar
+        organization-0.0.1-20250212.043425-1.jar
+        organization-0.0.1-20250212.043425-1.module.sha1
+        organization-0.0.1-20250212.043425-1-sources.jar.sha1
+        maven-metadata.xml.md5
+        organization-0.0.1-20250212.043425-1-javadoc.jar.md5
+        maven-metadata.xml.sha1
+         */
+
+        File pomFile = artifacts.find { it.name.endsWith(".pom") }
+        pomFile
+        pomFile.text.replaceAll('\\n', '').replaceAll('\\s+', ' ').contains("<organization> <name>Apache Software Foundation</name> <url>https://www.apache.org/</url> </organization>")
+    }
+
     def "source artifact test - simple project"() {
         given:
         File tempDir = File.createTempDir("simple-project")
