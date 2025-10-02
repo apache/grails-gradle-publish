@@ -33,10 +33,10 @@ allprojects {
     }
 }
 
-version = "${projectVersion}"
-group = "org.grails.example"
+version = projectVersion
+group = 'org.grails.example'
 
 subprojects { project ->
-    version = "${projectVersion}"
-    group = "org.grails.example"
+    version = projectVersion
+    group = 'org.grails.example'
 }

@@ -27,11 +27,6 @@ buildscript {
     }
 }
 
-plugins {
-    id 'java-library'
-    id 'groovy'
-}
-
 allprojects {
     repositories {
         maven { url = 'https://repo.grails.org/grails/restricted' }
@@ -41,11 +36,26 @@ allprojects {
 version = projectVersion
 group = 'org.grails.example'
 
+apply plugin: 'java-library'
+apply plugin: 'groovy'
+
 dependencies {
     implementation "org.apache.groovy:groovy:$groovyVersion"
 }
 
-subprojects { project ->
-    version = projectVersion
-    group = 'org.grails.example'
+apply plugin: 'org.apache.grails.gradle.grails-publish'
+grailsPublish {
+    githubSlug = 'apache/grails-cores'
+    license {
+        name = 'Apache-2.0'
+    }
+    title = 'Grails Gradle Plugin - Example Project'
+    desc = 'A testing project for the grails gradle plugin'
+    developers = [
+            jdaugherty: 'James Daugherty',
+    ]
+    organization {
+        name = 'Apache Software Foundation'
+        url = 'https://www.apache.org/'
+    }
 }

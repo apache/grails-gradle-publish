@@ -41,7 +41,6 @@ import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.api.plugins.JavaPlatformExtension
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.plugins.PluginManager
-import org.gradle.api.publish.Publication
 import org.gradle.api.publish.PublicationContainer
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPom
@@ -55,7 +54,6 @@ import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.api.tasks.GroovySourceDirectorySet
-import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.TaskContainer
 import org.gradle.api.tasks.TaskProvider
@@ -333,9 +331,21 @@ Note: if project properties are used, the properties must be defined prior to ap
                             pom.description.set(gpe.desc.get())
                             pom.url.set(gpe.websiteUrl.get())
 
+                            def organization = gpe.organization
+                            if (organization.name.isPresent() || organization.url.isPresent()) {
+                                pom.organization { org ->
+                                    if (organization.name.isPresent()) {
+                                        org.name.set(organization.name)
+                                    }
+                                    if (organization.url.isPresent()) {
+                                        org.url.set(organization.url)
+                                    }
+                                }
+                            }
+
                             def license = gpe.license
                             if (license) {
-                                def concreteLicense = GrailsPublishExtension.License.LICENSES.get(license.name)
+                                def concreteLicense = License.LICENSES.get(license.name)
                                 if (concreteLicense) {
                                     pom.licenses { MavenPomLicenseSpec licenses ->
                                         licenses.license { MavenPomLicense pomLicense ->

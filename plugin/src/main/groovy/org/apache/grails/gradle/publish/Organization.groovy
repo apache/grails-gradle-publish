@@ -17,35 +17,15 @@
  *  under the License.
  */
 
-buildscript {
-    repositories {
-        maven { url "${System.getenv('LOCAL_MAVEN_PATH')}" }
-        maven { url = 'https://repo.grails.org/grails/restricted' }
-    }
-    dependencies {
-        classpath "org.apache.grails.gradle:grails-publish:$grailsGradlePluginVersion"
-    }
-}
+package org.apache.grails.gradle.publish
 
-plugins {
-    id 'java-library'
-    id 'groovy'
-}
+import groovy.transform.CompileStatic
+import org.gradle.api.provider.Property
 
-allprojects {
-    repositories {
-        maven { url = 'https://repo.grails.org/grails/restricted' }
-    }
-}
+@CompileStatic
+abstract class Organization {
 
-version = projectVersion
-group = 'org.grails.example'
+    abstract Property<String> getName()
 
-dependencies {
-    implementation "org.apache.groovy:groovy:$groovyVersion"
-}
-
-subprojects { project ->
-    version = projectVersion
-    group = 'org.grails.example'
+    abstract Property<String> getUrl()
 }

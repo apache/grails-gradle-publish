@@ -36,8 +36,8 @@ repositories {
     maven { url = 'https://repo.grails.org/grails/restricted' }
 }
 
-version = "${projectVersion}"
-group = "org.grails.example"
+version = projectVersion
+group = 'org.grails.example'
 
 dependencies {
     implementation "org.apache.groovy:groovy:$groovyVersion"

@@ -98,6 +98,10 @@ or
         title = 'My plugin title'
         desc = 'My plugin description'
         developers = [johndoe: 'John Doe']
+        organization {
+            name = 'My Company'
+            url = 'http://mycompany.com'
+        }
     }
 
 By default, this plugin will publish to the specified `MAVEN_PUBLISH` instance for snapshots, and `NEXUS_PUBLISH` for

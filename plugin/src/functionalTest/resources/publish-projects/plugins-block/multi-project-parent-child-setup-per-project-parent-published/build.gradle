@@ -33,8 +33,8 @@ plugins {
     id 'org.apache.grails.gradle.grails-publish'
 }
 
-version = "${projectVersion}"
-group = "org.grails.example"
+version = projectVersion
+group = 'org.grails.example'
 
 dependencies {
     implementation "org.apache.groovy:groovy:$groovyVersion"
@@ -45,8 +45,8 @@ allprojects {
         maven { url = 'https://repo.grails.org/grails/restricted' }
     }
 
-    version = "${projectVersion}"
-    group = "org.grails.example"
+    version = projectVersion
+    group = 'org.grails.example'
 }
 
 grailsPublish {
