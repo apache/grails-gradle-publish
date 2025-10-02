@@ -22,6 +22,6 @@ package org.grails.example
 class MyProject {
 
     def sayHello() {
-        println "Hello from SubProject2"
+        println('Hello from SubProject2')
     }
 }
