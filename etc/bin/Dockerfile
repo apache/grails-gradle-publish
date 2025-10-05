@@ -32,7 +32,7 @@ USER groovy
 
 WORKDIR /home/groovy
 RUN mkdir -p /home/groovy/scripts/etc/bin && mkdir -p /home/groovy/scripts/gradle/wrapper && mkdir -p /home/groovy/grails-verify && mkdir -p /home/groovy/project
-RUN curl -o /home/groovy/scripts/KEYS https://dist.apache.org/repos/dist/release/incubator/grails/KEYS
+RUN curl -o /home/groovy/scripts/KEYS https://dist.apache.org/repos/dist/release/grails/KEYS
 
 ADD --chown=groovy etc/bin /home/groovy/scripts/etc/bin
 ADD --chown=groovy gradlew /home/groovy/scripts

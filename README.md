@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-Grails Publish Gradle Plugin
+Apache Grails - Gradle Plugin - Grails Publish
 ========
 
 Grails Publish is a Gradle plugin to ease publishing with the maven publish plugin or the nexus publish plugin. Artifacts published by this plugin include sources, the jar file, and a javadoc jar (that contains both the groovydoc & javadoc). This plugin is expected to be used with `snapshot` and `release` builds and assumes `releases` will require signed artifacts.

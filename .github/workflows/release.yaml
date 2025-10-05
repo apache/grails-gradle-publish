@@ -192,7 +192,7 @@ jobs:
       - name: "📦 Create source distribution ZIP"
         run: |
           zip -r \
-          "apache-grails-publish-${{ needs.publish.outputs.release_version }}-incubating-src.zip" \
+          "apache-grails-publish-${{ needs.publish.outputs.release_version }}-src.zip" \
           grails-publish \
           -x 'grails-publish/.git/*' \
           -x 'grails-publish/.github/*'
@@ -208,19 +208,19 @@ jobs:
           --yes \
           --pinentry-mode loopback \
           --armor \
-          --detach-sign apache-grails-publish-${{ needs.publish.outputs.release_version }}-incubating-src.zip
+          --detach-sign apache-grails-publish-${{ needs.publish.outputs.release_version }}-src.zip
       - name: "📦 Create source distribution checksum"
         run: |
-          sha512sum "apache-grails-publish-${{ needs.publish.outputs.release_version }}-incubating-src.zip" \
-          > "apache-grails-publish-${{ needs.publish.outputs.release_version }}-incubating-src.zip.sha512"
+          sha512sum "apache-grails-publish-${{ needs.publish.outputs.release_version }}-src.zip" \
+          > "apache-grails-publish-${{ needs.publish.outputs.release_version }}-src.zip.sha512"
       - name: "🚀 Upload ZIP and Signature to GitHub Release"
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.publish.outputs.release_version }}
           files: |
-            apache-grails-publish-${{ needs.publish.outputs.release_version }}-incubating-src.zip
-            apache-grails-publish-${{ needs.publish.outputs.release_version }}-incubating-src.zip.asc
-            apache-grails-publish-${{ needs.publish.outputs.release_version }}-incubating-src.zip.sha512
+            apache-grails-publish-${{ needs.publish.outputs.release_version }}-src.zip
+            apache-grails-publish-${{ needs.publish.outputs.release_version }}-src.zip.asc
+            apache-grails-publish-${{ needs.publish.outputs.release_version }}-src.zip.sha512
       - name: "🗑️ Remove CHECKSUMS.txt asset from release"
         working-directory: 'grails-publish'
         env:
@@ -271,28 +271,28 @@ jobs:
       - name: "👀 Ensure grails dev folder exists"
         run: |
           set -e
-          if svn ls https://dist.apache.org/repos/dist/dev/incubator/grails --username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive; then
+          if svn ls https://dist.apache.org/repos/dist/dev/grails --username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive; then
             echo "Dev Folder 'grails' already exists — skipping creation"
           else
             echo "Dev Folder 'grails' does not exist, creating"
             svnmucc --username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive \
-              mkdir https://dist.apache.org/repos/dist/dev/incubator/grails \
+              mkdir https://dist.apache.org/repos/dist/dev/grails \
               -m "Create 'grails' dev folder"
           fi
       - name: "👀 Ensure grails publish folder exists"
         run: |
           set -e
-          if svn ls https://dist.apache.org/repos/dist/dev/incubator/grails/grails-publish --username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive; then
+          if svn ls https://dist.apache.org/repos/dist/dev/grails/grails-publish --username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive; then
             echo "Dev Folder 'grails/grails-publish' already exists — skipping creation"
           else
             echo "Dev Folder 'grails/grails-publish' does not exist, creating"
             svnmucc --username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive \
-              mkdir https://dist.apache.org/repos/dist/dev/incubator/grails/grails-publish \
+              mkdir https://dist.apache.org/repos/dist/dev/grails/grails-publish \
               -m "Create 'grails-publish' dev folder"
           fi
       - name: "📥 Checkout dev repo"
         run: |
-          svn checkout --username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive https://dist.apache.org/repos/dist/dev/incubator/grails/grails-publish dev-repo
+          svn checkout --username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive https://dist.apache.org/repos/dist/dev/grails/grails-publish dev-repo
       - name: "🗑️ Remove existing dev version"
         run: |
           export VERSION="${{ needs.publish.outputs.release_version }}"
@@ -310,9 +310,9 @@ jobs:
           cd dev-repo
           mkdir -p $VERSION/sources          
           cd $VERSION/sources
-          curl -f -LO https://github.com/apache/${{ needs.publish.outputs.extract_repository_name }}/releases/download/$TAG/apache-grails-publish-$VERSION-incubating-src.zip
-          curl -f -LO https://github.com/apache/${{ needs.publish.outputs.extract_repository_name }}/releases/download/$TAG/apache-grails-publish-$VERSION-incubating-src.zip.sha512
-          curl -f -LO https://github.com/apache/${{ needs.publish.outputs.extract_repository_name }}/releases/download/$TAG/apache-grails-publish-$VERSION-incubating-src.zip.asc
+          curl -f -LO https://github.com/apache/${{ needs.publish.outputs.extract_repository_name }}/releases/download/$TAG/apache-grails-publish-$VERSION-src.zip
+          curl -f -LO https://github.com/apache/${{ needs.publish.outputs.extract_repository_name }}/releases/download/$TAG/apache-grails-publish-$VERSION-src.zip.sha512
+          curl -f -LO https://github.com/apache/${{ needs.publish.outputs.extract_repository_name }}/releases/download/$TAG/apache-grails-publish-$VERSION-src.zip.asc
           echo "Downloaded the following files:"
           ls -l
       - name: "Upload distributions"
@@ -346,29 +346,13 @@ jobs:
           VERSION_COMMIT_ID: ${{ needs.publish.outputs.commit_hash }}
         run: |
           export DIST_SVN_REVISION=$(awk '/Last Changed Rev:/ {print $4}' dev-repo/DIST_SVN_REVISION.txt)
-          echo "::group::Grails PPMC Vote Email"
+          echo "::group::Grails PMC Vote Email"
           echo "*************************************************"
-          echo "Subject: [VOTE] Release Apache Grails (incubating) - Gradle Plugin - Grails Publish ${VERSION}"
+          echo "Subject: [VOTE] Release Apache Grails - Gradle Plugin - Grails Publish ${VERSION}"
           echo "*************************************************"
           echo "Body:"
           echo "*************************************************"
           cat grails-publish/.github/vote_templates/staged.txt | envsubst
-          echo "*************************************************"
-          echo "::endgroup::"
-      - name: '📧 Print Groovy Vote Email'
-        env:
-          VERSION: ${{ needs.publish.outputs.release_version }}
-          VERSION_COMMIT_ID: ${{ needs.publish.outputs.commit_hash }}
-        run: |
-          export DIST_SVN_REVISION=$(awk '/Last Changed Rev:/ {print $4}' dev-repo/DIST_SVN_REVISION.txt)
-          
-          echo "::group::Groovy PMC Vote Email"
-          echo "*************************************************"
-          echo "Subject: [VOTE] Approval of Apache Grails (incubating) - Gradle Plugin - Grails Publish ${VERSION} release by Groovy PMC"
-          echo "*************************************************"
-          echo "Body:"
-          echo "*************************************************"
-          cat grails-publish/.github/vote_templates/groovy_pmc.txt | envsubst
           echo "*************************************************"
           echo "::endgroup::"
   release:
@@ -381,7 +365,7 @@ jobs:
         run: curl -s https://api.ipify.org
       - name: "Setup SVN and Tools"
         run: sudo apt-get install -y subversion subversion-tools tree gettext-base
-      - name: "🗳 Grails PPMC Vote Confirmation - MANUAL"
+      - name: "🗳 Grails PMC Vote Confirmation - MANUAL"
         run: |
           echo "::group::Manual Confirmation"
           echo "🔎 This step is a placeholder that the vote confirmation on dev@grails.apache.org completed successfully."
@@ -406,7 +390,6 @@ jobs:
           echo "::group::Manual ASF Reporter Update"
           TODAY=$(date +"%Y-%m-%d")
           echo "Check email & update https://reporter.apache.org to mark the release ${{ needs.publish.outputs.release_version }} as complete as of ${TODAY}"
-          echo "Note: this is a place holder; currently this is not possible since Groovy sponsors us instead of the incubator PMC"
           echo "::endgroup::"
   docs:
     environment: docs
@@ -488,7 +471,7 @@ jobs:
 
           echo "::group::Announcement Email"
           echo "*************************************************"
-          echo "Subject: [ANNOUNCE] Apache Grails (incubating) - Gradle Plugin - Grails Publish ${VERSION}"
+          echo "Subject: [ANNOUNCE] Apache Grails - Gradle Plugin - Grails Publish ${VERSION}"
           echo "*************************************************"
           echo "Body:"
           echo "*************************************************"
