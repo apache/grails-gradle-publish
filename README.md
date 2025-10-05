@@ -24,7 +24,7 @@ Limitations
 
 This plugin currently acts as a wrapper around the `maven-publish` & `nexus-publish` plugins. There are known limitations with the `nexus-publish` plugin - specifically, when it can be applied in multiproject setups. Check out the functional test resources for specific scenarios that work and do not work.
 
-Setup
+Development Setup
 ---
 If obtaining the source from the source distribution and you intend to build from source, you also need to download and install Gradle and use it to execute the bootstrap step so the correct version of Gradle is used. This command will bootstrap gradle: 
 
@@ -48,7 +48,7 @@ This project can be published to your local Maven repository by running:
 ./gradlew publishToMavenLocal
 ```
 
-Installation
+Plugin Installation
 ---
 To include this plugin in your project, add the following to your `build.gradle` file:
 
@@ -139,10 +139,10 @@ The [Gradle Signing Plugin](https://docs.gradle.org/current/userguide/signing_pl
 1. Using a `secring.gpg` file: This file can be created with the command `gpg --keyring secring.gpg --export-secret-keys > ./secring.gpg`.  For CI environments, it's often stored in base64 format as a secret and decoded at runtime into a local file. To use this configuration specify the property `signing.secretKeyRingFile` or the environment variable `SIGNING_KEYRING` with path to the file. The property `signing.password` or environment variable `SIGNING_PASSPHRASE` can be set to specify a passphrase for the key.
 2. Using the local GPG command with a private GPG or OpenPGP key. This behavior is the default if the secring file is not configured. In a CI environment, such as GitHub actions, GPG can be setup with the command: `echo "${{ secrets.MY_GPG_KEY }}" | gpg --batch --import` and the import can be confirmed successful by running the command `gpg --list-keys` to show the key ID.
 
-Release Verification
+Grails Publish Release Verification
 ---
 
-To verify a reproducible build from a staged release, you can use a containerized environment such as docker to run in an environment equivalent to GitHub actions. First, ensure the gradle wrapper is downloaded by running:
+To verify a staged release of `Grails Publish` is reproducible, you can use a containerized environment such as docker to run in an environment equivalent to GitHub actions. First, ensure the gradle wrapper is downloaded by running:
 
 ```shell
 gradle -p gradle-bootstrap
