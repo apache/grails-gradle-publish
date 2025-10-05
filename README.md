@@ -66,8 +66,10 @@ And then apply the plugin:
 apply plugin: 'org.apache.grails.gradle.grails-publish'
 ```
 
-Plugin Configuration: Initial Setup
+Plugin Configuration
 ---
+
+### Initial Setup
 Example Configuration:
 
     grailsPublish {
@@ -120,7 +122,7 @@ The credentials and connection url must be specified as a project property or an
 
 By default, a `release` or `snapshot` build is determined by the `project.version` or `projectVersion` gradle property. To override this behavior, use the environment variable `GRAILS_PUBLISH_RELEASE` with a boolean value to indicate if the build is a `release` or `snapshot`.
 
-### Plugin Configuration: Release Signing
+### Release Signing
 
 `release` builds are expected to be signed by this build. To disable this behavior, add the following Gradle code: 
 
