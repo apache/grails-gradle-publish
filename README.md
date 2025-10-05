@@ -17,22 +17,16 @@ limitations under the License.
 Grails Publish Gradle Plugin
 ========
 
-Grails Publish is a Gradle plugin to ease publishing with the maven publish plugin or the nexus publish plugin.
-
-Artifacts published by this plugin include sources, the jar file, and a javadoc jar that contains both the groovydoc &
-javadoc.
+Grails Publish is a Gradle plugin to ease publishing with the maven publish plugin or the nexus publish plugin. Artifacts published by this plugin include sources, the jar file, and a javadoc jar (that contains both the groovydoc & javadoc). This plugin is expected to be used with `snapshot` and `release` builds and assumes `releases` will require signed artifacts.
 
 Limitations
 ---
 
-This plugin currently acts as a wrapper around the `maven-publish` & `nexus-publish` plugins. There are known
-limitations with the `nexus-publish` plugin - specifically, when it can be applied in multiproject setups. Check out the
-functional test resources for specific scenarios that work and do not work.
+This plugin currently acts as a wrapper around the `maven-publish` & `nexus-publish` plugins. There are known limitations with the `nexus-publish` plugin - specifically, when it can be applied in multiproject setups. Check out the functional test resources for specific scenarios that work and do not work.
 
 Setup
 ---
-If obtaining the source from the source distribution and you intend to build from source, you also need to download and
-install Gradle and use it to execute the bootstrap step so the correct version of Gradle is used. This command will bootstrap gradle: 
+If obtaining the source from the source distribution and you intend to build from source, you also need to download and install Gradle and use it to execute the bootstrap step so the correct version of Gradle is used. This command will bootstrap gradle: 
 
 ```shell
 gradle -p gradle-bootstrap
@@ -72,7 +66,7 @@ And then apply the plugin:
 apply plugin: 'org.apache.grails.gradle.grails-publish'
 ```
 
-Configuration
+Plugin Configuration: Initial Setup
 ---
 Example Configuration:
 
@@ -124,11 +118,27 @@ The credentials and connection url must be specified as a project property or an
     NEXUS_PUBLISH_SNAPSHOT_URL
     NEXUS_PUBLISH_STAGING_PROFILE_ID
 
-By default, the release or snapshot state is determined by the project.version or projectVersion gradle property. To
-override this behavior, use the environment variable `GRAILS_PUBLISH_RELEASE` with a boolean value to decide if it's a
-release or snapshot.
+By default, a `release` or `snapshot` build is determined by the `project.version` or `projectVersion` gradle property. To override this behavior, use the environment variable `GRAILS_PUBLISH_RELEASE` with a boolean value to indicate if the build is a `release` or `snapshot`.
 
-## Release Verification
+### Plugin Configuration: Release Signing
+
+`release` builds are expected to be signed by this build. To disable this behavior, add the following Gradle code: 
+
+    project.pluginManager.withPlugin('signing') {
+        project.tasks.withType(Sign).configureEach {
+            it.enabled = false
+        }
+    }
+
+Signing requires a valid GPG key. The key ID, or the abbreviated ID, must always be set using the property `signing.keyId` or environment variable `SIGNING_KEY`. This can be extracted with the following GPG command: `gpg --list-keys --keyid-format short | grep -Eo '[A-F0-9]{8}' | head -n 1`.
+
+The [Gradle Signing Plugin](https://docs.gradle.org/current/userguide/signing_plugin.html) supports many different signing configurations, this plugin configures the Signing plugin by one of the following: 
+
+1. Using a `secring.gpg` file: This file can be created with the command `gpg --keyring secring.gpg --export-secret-keys > ./secring.gpg`.  For CI environments, it's often stored in base64 format as a secret and decoded at runtime into a local file. To use this configuration specify the property `signing.secretKeyRingFile` or the environment variable `SIGNING_KEYRING` with path to the file. The property `signing.password` or environment variable `SIGNING_PASSPHRASE` can be set to specify a passphrase for the key.
+2. Using the local GPG command with a private GPG or OpenPGP key. This behavior is the default if the secring file is not configured. In a CI environment, such as GitHub actions, GPG can be setup with the command: `echo "${{ secrets.MY_GPG_KEY }}" | gpg --batch --import` and the import can be confirmed successful by running the command `gpg --list-keys` to show the key ID.
+
+Release Verification
+---
 
 To verify a reproducible build from a staged release, you can use a containerized environment such as docker to run in an environment equivalent to GitHub actions. First, ensure the gradle wrapper is downloaded by running:
 
