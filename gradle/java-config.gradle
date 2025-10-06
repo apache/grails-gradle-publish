@@ -63,10 +63,6 @@ tasks.withType(Jar).configureEach {
     )
 
     if (it.archiveClassifier.getOrNull() != 'javadoc') {
-        from(rootProject.layout.projectDirectory.file('DISCLAIMER')) {
-            into('META-INF')
-        }
-
         from(rootProject.layout.projectDirectory.file('LICENSE')) {
             into('META-INF')
             rename { 'LICENSE' }

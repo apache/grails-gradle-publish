@@ -42,9 +42,14 @@ publishing {
     publications {
         pluginMaven(MavenPublication) {
             pom {
-                name = 'Grails Publish Gradle Plugin'
+                name = 'Apache Grails - Gradle Plugin - Grails Publish'
                 description = 'A Gradle Plugin to assist in publishing Grails related artifacts to different repository types'
                 url = 'https://apache.grails.org'
+
+                organization {
+                    name = "The Apache Software Foundation"
+                    url = "https://www.apache.org"
+                }
 
                 licenses {
                     license {
