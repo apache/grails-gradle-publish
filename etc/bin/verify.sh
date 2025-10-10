@@ -19,6 +19,7 @@
 #
 set -euo pipefail
 
+PROJECT_NAME='grails-publish'
 RELEASE_TAG=$1
 DOWNLOAD_LOCATION="${2:-downloads}"
 DOWNLOAD_LOCATION=$(realpath "${DOWNLOAD_LOCATION}")
