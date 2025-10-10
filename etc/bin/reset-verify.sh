@@ -17,6 +17,7 @@
 #  under the License.
 #
 
+PROJECT_NAME='grails-publish'
 RELEASE_TAG=$1
 DOWNLOAD_LOCATION="${2:-downloads}"
 DOWNLOAD_LOCATION=$(realpath "${DOWNLOAD_LOCATION}")
@@ -33,7 +34,7 @@ CWD=$(pwd)
 
 cd "${DOWNLOAD_LOCATION}"
 rm *.zip *.asc *.sha512
-cd grails-publish
+cd "${PROJECT_NAME}"
 find . -mindepth 1 -path ./etc -prune -o -exec rm -rf {} +
 cd etc
 find . -mindepth 1 -path ./bin -prune -o -exec rm -rf {} +

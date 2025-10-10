@@ -19,6 +19,7 @@
 # This file assumes the gnu version of coreutils is installed, which is not installed by default on a mac
 set -e
 
+PROJECT_NAME='grails-publish'
 DOWNLOAD_LOCATION="${1:-downloads}"
 DOWNLOAD_LOCATION=$(realpath "${DOWNLOAD_LOCATION}")
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -30,38 +31,38 @@ cleanup() {
 }
 trap cleanup ERR
 
-cd "${DOWNLOAD_LOCATION}/grails-publish"
+cd "${DOWNLOAD_LOCATION}/${PROJECT_NAME}"
 echo "Searching under ${DOWNLOAD_LOCATION}"
 
-mkdir -p "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results"
-if [[ -f "${DOWNLOAD_LOCATION}/grails-publish/CHECKSUMS" ]]; then
+mkdir -p "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results"
+if [[ -f "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/CHECKSUMS" ]]; then
   echo "✅ File 'CHECKSUMS' exists."
 else
   echo "❌ File 'CHECKSUMS' not found. Grails Source Distributions should have a CHECKSUMS file at the root..."
   exit 1
 fi
 
-if [[ -f "${DOWNLOAD_LOCATION}/grails-publish/BUILD_DATE" ]]; then
+if [[ -f "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/BUILD_DATE" ]]; then
   echo "✅ File 'BUILD_DATE' exists."
 else
   echo "❌ File 'BUILD_DATE' not found. Grails Source Distributions should have a BUILD_DATE file at the root..."
   exit 1
 fi
-export SOURCE_DATE_EPOCH=$(cat "${DOWNLOAD_LOCATION}/grails-publish/BUILD_DATE")
+export SOURCE_DATE_EPOCH=$(cat "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/BUILD_DATE")
 export TEST_BUILD_REPRODUCIBLE='true'
 
-if [[ -d "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/first" ]]; then
+if [[ -d "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/first" ]]; then
   echo "✅ Directory containing downloaded jar files exists ('first')."
 else
-  echo "❌ Directory 'first' not found. Please place the published jar files under ${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/first..."
+  echo "❌ Directory 'first' not found. Please place the published jar files under ${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/first..."
   exit 1
 fi
 
 killall -e java || true
 ./gradlew publishToMavenLocal --rerun-tasks -PskipTests --no-build-cache
 echo "Generating Checksums for Built Jars"
-"${SCRIPT_DIR}/generate-build-artifact-hashes.groovy" "${DOWNLOAD_LOCATION}/grails-publish" > "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second.txt"
-if [ -e "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second.txt" ] && [ ! -s "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second.txt" ]; then
+"${SCRIPT_DIR}/generate-build-artifact-hashes.groovy" "${DOWNLOAD_LOCATION}/${PROJECT_NAME}" > "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second.txt"
+if [ -e "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second.txt" ] && [ ! -s "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second.txt" ]; then
   echo "❌ Error: Could not find any checksums for built jar files!"
   exit 1
 fi
@@ -71,18 +72,18 @@ echo "Flattening Checksum file"
 tmpfile=$(mktemp)
 while read -r filepath checksum; do
   printf '%s %s\n' "$(basename "$filepath")" "$checksum"
-done < "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second.txt" > "$tmpfile" && mv "$tmpfile" "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second.txt"
+done < "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second.txt" > "$tmpfile" && mv "$tmpfile" "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second.txt"
 
 echo "Filtering non-published jars"
 # filter to only published jars to compare against
-cut -d' ' -f1 "${DOWNLOAD_LOCATION}/grails-publish/CHECKSUMS" | grep -Ff - "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second.txt" > "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/filtered.txt"
-rm -f "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second.txt"
-mv "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/filtered.txt" "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second.txt"
+cut -d' ' -f1 "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/CHECKSUMS" | grep -Ff - "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second.txt" > "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/filtered.txt"
+rm -f "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second.txt"
+mv "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/filtered.txt" "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second.txt"
 
-mkdir -p "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second"
-find . -path ./etc -prune -o -type f -path '*/build/libs/*.jar' ! -name "buildSrc.jar" -exec cp -t "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results/second/" -- {} +
+mkdir -p "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second"
+find . -path ./etc -prune -o -type f -path '*/build/libs/*.jar' ! -name "buildSrc.jar" -exec cp -t "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results/second/" -- {} +
 
-cd "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results"
+cd "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results"
 
 echo "Checking for differences in checksums"
 # diff -u CHECKSUMS second.txt
@@ -107,7 +108,7 @@ if [ -s diff.txt ]; then
       echo "Checking jar ${jar_file}..."
 
       echo "Extracting ${jar_file}"
-      "${SCRIPT_DIR}/extract-build-artifact.sh" "${jar_file}" "${DOWNLOAD_LOCATION}/grails-publish/etc/bin/results"
+      "${SCRIPT_DIR}/extract-build-artifact.sh" "${jar_file}" "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/etc/bin/results"
       echo "✅ Extracted ${jar_file} to firstArtifact and secondArtifact directories."
 
       # Check extraction success

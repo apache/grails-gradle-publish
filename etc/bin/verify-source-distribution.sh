@@ -19,6 +19,7 @@
 #
 set -euo pipefail
 
+PROJECT_NAME='grails-publish'
 RELEASE_TAG=$1
 DOWNLOAD_LOCATION="${2:-downloads}"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -31,10 +32,10 @@ fi
 VERSION=${RELEASE_TAG#v}
 
 cd "${DOWNLOAD_LOCATION}"
-ZIP_FILE=$(ls "apache-grails-publish-${VERSION}-src.zip" 2>/dev/null | head -n 1)
+ZIP_FILE=$(ls "apache-${PROJECT_NAME}-${VERSION}-src.zip" 2>/dev/null | head -n 1)
 
 if [ -z "${ZIP_FILE}" ]; then
-  echo "Error: Could not find apache-grails-publish-${VERSION}-src.zip in ${DOWNLOAD_LOCATION}"
+  echo "Error: Could not find apache-${PROJECT_NAME}-${VERSION}-src.zip in ${DOWNLOAD_LOCATION}"
   exit 1
 fi
 
@@ -45,7 +46,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Verifying checksum..."
-shasum -a 512 -c "apache-grails-publish-${VERSION}-src.zip.sha512"
+shasum -a 512 -c "apache-${PROJECT_NAME}-${VERSION}-src.zip.sha512"
 echo "✅ Checksum Verified"
 
 echo "Importing GPG key to independent GPG home ..."
@@ -53,14 +54,14 @@ gpg --homedir "${GRAILS_GPG_HOME}" --import "${SCRIPT_DIR}/../../KEYS"
 echo "✅ GPG Key Imported"
 
 echo "Verifying GPG signature..."
-gpg --homedir "${GRAILS_GPG_HOME}" --verify "apache-grails-publish-${VERSION}-src.zip.asc" "apache-grails-publish-${VERSION}-src.zip"
+gpg --homedir "${GRAILS_GPG_HOME}" --verify "apache-${PROJECT_NAME}-${VERSION}-src.zip.asc" "apache-${PROJECT_NAME}-${VERSION}-src.zip"
 echo "✅ GPG Verified"
 
-SRC_DIR="grails-publish"
+SRC_DIR="${PROJECT_NAME}"
 
 if [ -d "${SRC_DIR}" ]; then
-  echo "Previous grails directory found, purging"
-  cd grails-publish
+  echo "Previous ${SRC_DIR} directory found, purging"
+  cd "${SRC_DIR}"
   find . -mindepth 1 -path ./etc -prune -o -exec rm -rf {} + || true
   cd etc
   find . -mindepth 1 -path ./bin -prune -o -exec rm -rf {} + || true
@@ -69,7 +70,7 @@ if [ -d "${SRC_DIR}" ]; then
   cd "${DOWNLOAD_LOCATION}"
 fi
 echo "Extracting zip file..."
-unzip -q "apache-grails-publish-${VERSION}-src.zip"
+unzip -q "apache-${PROJECT_NAME}-${VERSION}-src.zip"
 
 if [ ! -d "${SRC_DIR}" ]; then
   echo "Error: Expected extracted folder '${SRC_DIR}' not found."

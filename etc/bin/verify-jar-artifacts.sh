@@ -20,6 +20,7 @@
 
 set -euo pipefail
 
+PROJECT_NAME='grails-publish'
 RELEASE_TAG=$1
 DOWNLOAD_LOCATION="${2:-downloads}"
 DOWNLOAD_LOCATION=$(realpath "${DOWNLOAD_LOCATION}")
@@ -31,8 +32,8 @@ fi
 
 VERSION=${RELEASE_TAG#v}
 
-ARTIFACTS_FILE="${DOWNLOAD_LOCATION}/grails-publish/PUBLISHED_ARTIFACTS"
-CHECKSUMS_FILE="${DOWNLOAD_LOCATION}/grails-publish/CHECKSUMS"
+ARTIFACTS_FILE="${DOWNLOAD_LOCATION}/${PROJECT_NAME}/PUBLISHED_ARTIFACTS"
+CHECKSUMS_FILE="${DOWNLOAD_LOCATION}/${PROJECT_NAME}/CHECKSUMS"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 if [ ! -f "${ARTIFACTS_FILE}" ]; then
@@ -58,13 +59,13 @@ trap error ERR
 cd "${DOWNLOAD_LOCATION}"
 
 echo "Importing GPG key to independent GPG home ..."
-gpg --homedir "${GRAILS_GPG_HOME}" --import "${SCRIPT_DIR}/../../KEYS"
+gpg --homedir "${GRAILS_GPG_HOME}" --import "${DOWNLOAD_LOCATION}/KEYS"
 echo "✅ GPG Key Imported"
 
 REPO_BASE_URL="https://repository.apache.org/content/groups/staging"
 
 # switch to the extracted Grails source directory
-cd grails-publish
+cd "${PROJECT_NAME}"
 
 # Create a temporary directory to work in
 WORK_DIR='etc/bin/results/first'
