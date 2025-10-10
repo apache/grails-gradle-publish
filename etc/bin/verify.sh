@@ -37,6 +37,12 @@ cleanup() {
 }
 trap cleanup ERR
 
+cd "${DOWNLOAD_LOCATION}"
+
+echo "Downloading KEYS file ..."
+curl -sSfLO "https://dist.apache.org/repos/dist/release/grails/KEYS"
+echo "✅ KEYS Downloaded"
+
 echo "Downloading Artifacts ..."
 "${SCRIPT_DIR}/download-release-artifacts.sh" "${RELEASE_TAG}" "${DOWNLOAD_LOCATION}"
 echo "✅ Artifacts Downloaded"
@@ -54,12 +60,21 @@ which java
 java -version
 
 echo "Bootstrap Gradle ..."
-cd "${DOWNLOAD_LOCATION}/grails-publish/gradle-bootstrap"
-gradlew
+cd "${DOWNLOAD_LOCATION}/${PROJECT_NAME}/gradle-bootstrap"
+
+if GRADLE_CMD="$(command -v gradlew 2>/dev/null)"; then
+    :   # found the wrapper on PATH
+elif GRADLE_CMD="$(command -v gradle 2>/dev/null)"; then
+    :   # fall back to system-wide Gradle
+else
+    echo "ERROR: Neither gradlew nor gradle found on \$PATH." >&2
+    exit 1
+fi
+${GRADLE_CMD}
 echo "✅ Gradle Bootstrapped"
 
 echo "Applying License Audit ..."
-cd "${DOWNLOAD_LOCATION}/grails-publish"
+cd "${DOWNLOAD_LOCATION}/${PROJECT_NAME}"
 ./gradlew rat
 echo "✅ RAT passed"
 
