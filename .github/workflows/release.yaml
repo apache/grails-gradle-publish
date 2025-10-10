@@ -140,6 +140,7 @@ jobs:
       - name: "📤 Upload build date, checksums and published artifacts files"
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.release.tag_name }}
           files: |
             build/BUILD_DATE.txt
             build/CHECKSUMS.txt
@@ -216,7 +217,7 @@ jobs:
       - name: "🚀 Upload ZIP and Signature to GitHub Release"
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.publish.outputs.release_version }}
+          tag_name: ${{ github.event.release.tag_name }}
           files: |
             apache-grails-publish-${{ needs.publish.outputs.release_version }}-src.zip
             apache-grails-publish-${{ needs.publish.outputs.release_version }}-src.zip.asc
@@ -333,6 +334,7 @@ jobs:
       - name: "📤 Upload the Distribution SVN revision file"
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.release.tag_name }}
           files: dev-repo/DIST_SVN_REVISION.txt
       - name: "📥 Checkout repository"
         uses: actions/checkout@v4
