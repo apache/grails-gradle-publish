@@ -23,17 +23,19 @@
 
 set -euo pipefail
 
-if [[ $# -ne 3 ]]; then
-  echo "Usage: $0 <tag> <username> <password>" >&2
+if [[ $# -ne 2 ]]; then
+  echo "Usage: $0 <tag> <username>" >&2
   exit 1
 fi
 
 RELEASE_TAG="$1"
 RELEASE_VERSION="${RELEASE_TAG#v}"
 SVN_USER="$2"
-SVN_PASS="$3"
 RELEASE_ROOT="https://dist.apache.org/repos/dist/release/grails/grails-publish"
 DEV_ROOT="https://dist.apache.org/repos/dist/dev/grails/grails-publish"
+
+read -r -s -p "Password: " SVN_PASS
+echo
 
 if [[ -z "${RELEASE_TAG}" ]]; then
   echo "❌ ERROR: Release Tag must not be empty." >&2
