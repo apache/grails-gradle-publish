@@ -312,6 +312,11 @@ jobs:
           export DIST_SVN_REVISION=$(awk '/Last Changed Rev:/ {print $4}' dev-repo/DIST_SVN_REVISION.txt)
           echo "::group::Grails PMC Vote Email"
           echo ""
+          echo "TO:"
+          echo "*************************************************"
+          echo "dev@grails.apache.org"
+          echo "*************************************************"
+          echo ""
           echo "Subject:"
           echo "*************************************************"
           echo "[VOTE] Release Apache Grails - Gradle Plugin - Grails Publish ${VERSION}"
@@ -414,6 +419,11 @@ jobs:
           PREVIOUS_VERSION: 'TODO_PREVIOUS_VERSION'
         run: |
           echo "::group::Announcement Email"
+          echo ""
+          echo "TO:"
+          echo "*************************************************"
+          echo "announce@apache.org, dev@grails.apache.org, users@grails.apache.org"
+          echo "*************************************************"
           echo ""
           echo "Subject:"
           echo "*************************************************"
