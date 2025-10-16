@@ -372,7 +372,7 @@ jobs:
         run: |
           echo "::group::Manual ASF Reporter Update"
           TODAY=$(date +"%Y-%m-%d")
-          echo "Check email from no-reply@reporter.apache.org & update https://reporter.apache.org/addrelease.html?grails to add GRAILS-PUBLISH-${{ needs.test.outputs.release_version }} as complete as of ${TODAY}"
+          echo "Check email from no-reply@reporter.apache.org & update https://reporter.apache.org/addrelease.html?grails to add GRAILS-PUBLISH-${{ needs.publish.outputs.release_version }} as complete as of ${TODAY}"
           echo "::endgroup::"
   docs:
     environment: docs
