@@ -111,7 +111,7 @@ class GrailsPublishExtension {
     /**
      * An optional closure to be invoked via pom.withXml { } to allow further customization
      */
-    Closure pomCustomization
+    final Property<Closure> pomCustomization
 
     /**
      * If another process will add the components set this to false so only the publication is created
@@ -178,6 +178,7 @@ class GrailsPublishExtension {
         })
         publishTestSources = objects.property(Boolean).convention(false)
         testRepositoryPath = objects.directoryProperty().convention(null as Directory)
+        pomCustomization = objects.property(Closure).convention(null as Closure)
         addComponents = objects.property(Boolean).convention(true)
         publicationName = objects.property(String).convention('maven')
         transitiveDependencies = objects.property(Boolean).convention(true)
