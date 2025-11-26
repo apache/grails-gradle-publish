@@ -1,19 +1,20 @@
-The Apache Grails community is pleased to announce the release of Apache Grails - Grails Publish Gradle Plugin ${VERSION}.
+The Apache Grails community is pleased to announce the release of Apache Grails - ${PROJECT_NAME} ${VERSION}.
 
-The Grails Publish Gradle Plugin is a tool that simplifies the process of publishing Grails-related artifacts to various repository types - making it easier for developers to share their work with the community.
+${PROJECT_DESC}
 
-Users are encouraged to try the milestone to provide early feedback. Detailed instructions are available here: https://github.com/apache/grails-gradle-publish.
+The release notes are available here:
+https://github.com/${REPO_SLUG}/releases/tag/${TAG}
 
 For the complete list of changes:
-https://github.com/apache/grails-gradle-publish/compare/v${PREVIOUS_VERSION}...v${VERSION}
+https://github.com/${REPO_SLUG}/compare/v<PREVIOUS_VERSION>...${TAG}
 
 Apache Grails website: https://grails.apache.org/
 
 Download Links: https://grails.apache.org/download.html
 
 Grails Resources:
-- Grails Publish Gradle Plugin GitHub repo: https://github.com/apache/grails-gradle-publish
-- Issues: https://github.com/apache/grails-gradle-publish/issues
+- ${PROJECT_NAME} repo: https://github.com/${REPO_SLUG}
+- Issues: https://github.com/${REPO_SLUG}/issues
 - Mailing lists: https://grails.apache.org/community.html
 
 Happy Coding,
