@@ -22,7 +22,7 @@ env:
   DIST_NAME: apache-grails-publish
   GRAILS_PUBLISH_RELEASE: 'true'
   JAVA_DISTRIBUTION: liberica
-  JAVA_VERSION: 17.0.17 # this must be a specific version for reproducible builds, keep it synced with .sdkmanrc
+  JAVA_VERSION: 17.0.17 # this must be a specific version for reproducible builds, keep it synced with .sdkmanrc and verification container
   PROJECT_DESC: >
     The Grails Publish Gradle Plugin is a tool that simplifies the process of publishing
     Grails-related artifacts to various repository types - making it easier for developers
