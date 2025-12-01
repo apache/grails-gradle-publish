@@ -19,21 +19,18 @@
 #  under the License.
 #
 
-# ./releaseDistributions.sh <tag> <username> <password>
+# ./releaseDistributions.sh <release-tag> <svn-folder> <username>
 
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <tag> <username>" >&2
+  echo "Usage: $0 <release-tag> <svn-folder> <username>" >&2
   exit 1
 fi
 
 RELEASE_TAG="$1"
-RELEASE_VERSION="${RELEASE_TAG#v}"
-SVN_USER="$2"
-RELEASE_ROOT="https://dist.apache.org/repos/dist/release/grails/grails-publish"
-DEV_ROOT="https://dist.apache.org/repos/dist/dev/grails/grails-publish"
-
+SVN_FOLDER="$2"
+SVN_USER="$3"
 read -r -s -p "Password: " SVN_PASS
 echo
 
@@ -49,6 +46,10 @@ if [[ -z "${SVN_PASS}" ]]; then
   echo "❌ ERROR: Password must not be empty." >&2
   exit 1
 fi
+
+RELEASE_VERSION="${RELEASE_TAG#v}"
+RELEASE_ROOT="https://dist.apache.org/repos/dist/release/grails/${SVN_FOLDER}"
+DEV_ROOT="https://dist.apache.org/repos/dist/dev/grails/${SVN_FOLDER}"
 
 svn_flags=(--non-interactive --trust-server-cert --username "${SVN_USER}" --password "${SVN_PASS}")
 
