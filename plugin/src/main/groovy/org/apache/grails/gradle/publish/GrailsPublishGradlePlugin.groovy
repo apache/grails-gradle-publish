@@ -41,6 +41,11 @@ import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.api.plugins.JavaPlatformExtension
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.plugins.PluginManager
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.MapProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.publish.PublicationContainer
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPom
@@ -62,6 +67,8 @@ import org.gradle.api.tasks.javadoc.Groovydoc
 import org.gradle.plugins.signing.Sign
 import org.gradle.plugins.signing.SigningExtension
 import org.gradle.plugins.signing.SigningPlugin
+
+import java.lang.reflect.Modifier
 
 import static org.gradle.api.plugins.BasePlugin.BUILD_GROUP
 
@@ -380,10 +387,9 @@ Note: if project properties are used, the properties must be defined prior to ap
 
                             if (gpe.developers) {
                                 pom.developers { MavenPomDeveloperSpec devs ->
-                                    for (entry in gpe.developers.get().entrySet()) {
-                                        devs.developer { MavenPomDeveloper dev ->
-                                            dev.id.set(entry.key)
-                                            dev.name.set(entry.value)
+                                    for (MavenPomDeveloper source : gpe.developers.get()) {
+                                        devs.developer { MavenPomDeveloper target ->
+                                            cloneDeveloper(source, target)
                                         }
                                     }
                                 }
@@ -458,6 +464,42 @@ Note: if project properties are used, the properties must be defined prior to ap
             }
 
             addInstallTaskAliases(project)
+        }
+    }
+
+    static void cloneDeveloper(MavenPomDeveloper source, MavenPomDeveloper target) {
+        source.metaClass.properties.each {
+            if(!Modifier.isPublic(it.modifiers)) {
+                return
+            }
+
+            String propertyName = it.name
+            def sourceProperty = it.getProperty(source)
+            if(sourceProperty == null || !Provider.isAssignableFrom(sourceProperty.class)) {
+                return
+            }
+
+            if (!target.hasProperty(propertyName)) {
+                return
+            }
+
+            def targetProperty = ((GroovyObject)target).getProperty(propertyName)
+            switch (sourceProperty) {
+                case Property:
+                    (targetProperty as Property).set((sourceProperty as Property).orNull)
+                    break
+                case SetProperty:
+                    (targetProperty as SetProperty).addAll((sourceProperty as SetProperty).getOrElse([] as Set))
+                    break
+                case ListProperty:
+                    (targetProperty as ListProperty).addAll((sourceProperty as ListProperty).getOrElse([]))
+                    break
+                case MapProperty:
+                    (targetProperty as MapProperty).putAll((sourceProperty as MapProperty).getOrElse([:]) as Map)
+                    break
+                default:
+                    throw new IllegalStateException("Could not handle type [${targetProperty.class}] for property [${propertyName}]")
+            }
         }
     }
 

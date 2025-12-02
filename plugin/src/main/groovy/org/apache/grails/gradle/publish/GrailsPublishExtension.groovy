@@ -23,8 +23,10 @@ import org.gradle.api.Action
 import org.gradle.api.Project
 import org.gradle.api.file.Directory
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.provider.MapProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.publish.maven.MavenPomDeveloper
+import org.gradle.api.publish.maven.internal.publication.DefaultMavenPomDeveloper
 import org.gradle.api.tasks.Nested
 
 import javax.inject.Inject
@@ -71,7 +73,8 @@ class GrailsPublishExtension {
     /**
      * The developers of the project
      */
-    final MapProperty<String, String> developers
+    @Nested
+    final ListProperty<MavenPomDeveloper> developers
 
     /**
      * Title of the project, defaults to the project name
@@ -134,8 +137,14 @@ class GrailsPublishExtension {
      */
     final Property<Boolean> transitiveDependencies
 
+    private ObjectFactory objects
+    private Project project
+
     @Inject
     GrailsPublishExtension(ObjectFactory objects, Project project) {
+        this.objects = objects
+        this.project = project
+
         githubSlug = objects.property(String).convention(
                 project.provider {
                     project.findProperty('githubSlug') as String
@@ -157,7 +166,7 @@ class GrailsPublishExtension {
             String githubSlug = githubSlug.getOrNull()
             githubSlug ? "git@github.com:${githubSlug}.git" as String : null
         })
-        developers = objects.mapProperty(String, String).convention([:])
+        developers = objects.listProperty(MavenPomDeveloper).convention([])
         title = objects.property(String).convention(project.provider { project.name })
         desc = objects.property(String).convention(project.provider {
             title.getOrNull()
@@ -214,5 +223,25 @@ class GrailsPublishExtension {
         this.license.name = license
     }
 
+    /**
+     * Convenience method to maintain backwards compatibility
+     */
+    void setDevelopers(Map<String, String> developers) {
+        developers.each { entry ->
+            developer {
+                it.id.set(entry.key)
+                it.name.set(entry.value)
+            }
+        }
+    }
+
+    /**
+     * Syntactic sugar to allow for easier developer creation
+     */
+    void developer(Action<? super MavenPomDeveloper> action) {
+        MavenPomDeveloper dev = objects.newInstance(MavenPomDeveloper)
+        action.execute(dev)
+        developers.add(dev)
+    }
 }
 

@@ -81,7 +81,7 @@ Example Configuration:
         vcsUrl = 'https://github.com/myname/myplugin'
         title = 'My plugin title'
         desc = 'My plugin description'
-        developers = [johndoe: 'John Doe']
+        developers = [janedoe: 'Jane Doe', johndoe: 'John Doe']
     }
 
 or
@@ -93,12 +93,37 @@ or
         }
         title = 'My plugin title'
         desc = 'My plugin description'
-        developers = [johndoe: 'John Doe']
+        developers = [janedoe: 'Jane Doe', johndoe: 'John Doe']
         organization {
             name = 'My Company'
             url = 'http://mycompany.com'
         }
     }
+
+or
+
+    grailsPublish {
+        githubSlug = 'foo/bar'
+        license {
+            name = 'Apache-2.0'
+        }
+        title = 'My plugin title'
+        desc = 'My plugin description'
+        developer {
+            id = 'janedoe'
+            name = 'Jane Doe'
+        }
+        developer {
+            id = 'johndoe'
+            name = 'John Doe'
+        }
+        organization {
+            name = 'My Company'
+            url = 'http://mycompany.com'
+        }
+    }
+
+    
 
 By default, this plugin will publish to the specified `MAVEN_PUBLISH` instance for snapshots, and `NEXUS_PUBLISH` for
 releases. To change the snapshot publish behavior, set `snapshotRepoType` to `PublishType.NEXUS_PUBLISH`. To change the
