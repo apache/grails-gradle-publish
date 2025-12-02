@@ -85,7 +85,7 @@ class GrailsPublishGradlePluginTest extends Specification {
         }
         gpe.title.set('Grails Gradle Publish Plugin')
         gpe.desc.set('A plugin to assist in publishing Grails artifacts')
-        gpe.developers.set(['jdaugherty': 'James Daugherty'])
+        gpe.developers = ['jdaugherty': 'James Daugherty']
 
         when:
         ((ProjectInternal) project).evaluate()
@@ -179,7 +179,7 @@ class GrailsPublishGradlePluginTest extends Specification {
         }
         gpe.title.set('Grails Gradle Publish Plugin')
         gpe.desc.set('A plugin to assist in publishing Grails artifacts')
-        gpe.developers.set(['jdaugherty': 'James Daugherty'])
+        gpe.developers = ['jdaugherty': 'James Daugherty']
 
         when:
         ((ProjectInternal) project).evaluate()
