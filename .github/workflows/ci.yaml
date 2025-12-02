@@ -16,6 +16,8 @@
 name: "CI"
 on:
   push:
+    branches:
+      - '**'      # all branches
     tags-ignore:
       - '**'   # ignore any tag ref
   pull_request:
