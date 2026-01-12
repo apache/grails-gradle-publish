@@ -467,6 +467,12 @@ jobs:
           echo "The post-release step in the release workflow will create a merge branch for the original tag with version number and then open a PR to merge back into the next branch."
           echo "You will need to merge this PR into the branch after correcting any merge conflict."
           echo "::endgroup::"
+      - name: "🌎 MANUAL - Update Version on Grails Website"
+        run: |
+          echo "::group::Update Version on Grails Website"
+          echo "Update the released version [${VERSION}] on the Grails Website"
+          echo "https://github.com/apache/grails-static-website/blob/master/buildSrc/src/main/groovy/org/grails/documentation/DownloadPage.groovy#L43"
+          echo "::endgroup::"
       - name: '📧 Announcement Email'
         run: |
           echo "::group::Announcement Email"
