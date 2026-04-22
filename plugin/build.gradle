@@ -29,7 +29,7 @@ dependencies {
     // compile grails-gradle-plugin with the Groovy version provided by Gradle
     // to ensure build compatibility with Gradle, currently Groovy 4.0.x
     // see: https://docs.gradle.org/current/userguide/compatibility.html#groovy
-    api platform("org.apache.groovy:groovy-bom:${GroovySystem.version}")
+    compileOnly platform("org.apache.groovy:groovy-bom:${GroovySystem.version}")
     compileOnly 'org.apache.groovy:groovy'
 
     implementation "io.github.gradle-nexus:publish-plugin:$gradleNexusPublishPluginVersion"
