@@ -26,7 +26,6 @@ import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.publish.maven.MavenPomDeveloper
-import org.gradle.api.publish.maven.internal.publication.DefaultMavenPomDeveloper
 import org.gradle.api.tasks.Nested
 
 import javax.inject.Inject
