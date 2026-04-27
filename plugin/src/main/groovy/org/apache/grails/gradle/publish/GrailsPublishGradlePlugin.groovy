@@ -331,6 +331,22 @@ Note: if project properties are used, the properties must be defined prior to ap
                             if (extraArtefact) {
                                 publication.artifact(extraArtefact)
                             }
+
+                            // Ensure Gradle module metadata includes resolved versions for
+                            // all dependencies. Without this, dependencies declared without
+                            // an explicit version (relying on a platform/BOM) are published
+                            // with no version in the .module file, causing resolution
+                            // failures for consumers since Gradle prefers .module over .pom.
+                            if (!project.extensions.findByType(JavaPlatformExtension)) {
+                                publication.versionMapping { strategy ->
+                                    strategy.usage('java-api') { variant ->
+                                        variant.fromResolutionOf('runtimeClasspath')
+                                    }
+                                    strategy.usage('java-runtime') { variant ->
+                                        variant.fromResolutionResult()
+                                    }
+                                }
+                            }
                         }
 
                         publication.pom { MavenPom pom ->
