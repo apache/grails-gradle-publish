@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
+if [[ $# -ne 3 ]]; then
   echo "Usage: $0 <release-tag> <svn-folder> <username>" >&2
   exit 1
 fi
