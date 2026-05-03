@@ -61,9 +61,15 @@ svn_exists() {
 old_release_folder="$(svn ls "${svn_flags[@]}" "${RELEASE_ROOT}" | awk -F/ 'NF{print $1; exit}')"
 if [[ -n "${old_release_folder}" ]]; then
   PRIOR_RELEASE_URL="${RELEASE_ROOT}/${old_release_folder}"
-  echo "🗑️ Deleting old release folder: ${PRIOR_RELEASE_URL}"
-  svn rm "${svn_flags[@]}" -m "Remove previous release ${old_release_folder}" "${PRIOR_RELEASE_URL}"
-  echo "✅ Deleted old release folder"
+  echo "⚠️  Existing release folder found: ${PRIOR_RELEASE_URL}"
+  read -r -p "Delete existing release folder? [y/N]: " confirm
+  if [[ "${confirm}" =~ ^[Yy]$ ]]; then
+    echo "🗑️ Deleting old release folder: ${PRIOR_RELEASE_URL}"
+    svn rm "${svn_flags[@]}" -m "Remove previous release ${old_release_folder}" "${PRIOR_RELEASE_URL}"
+    echo "✅ Deleted old release folder"
+  else
+    echo "ℹ️ Keeping existing release folder"
+  fi
 else
   echo "ℹ️ No existing release subfolder found under ${RELEASE_ROOT}"
 fi
