@@ -22,7 +22,7 @@
 <html>
 <head>
 
-<title>org.apache.grails.gradle.publish (grails-publish 0.0.6-SNAPSHOT API)</title>
+<title>org.apache.grails.gradle.publish (grails-publish 1.0.0-SNAPSHOT API)</title>
 <meta name="keywords" content="org.apache.grails.gradle.publish package">
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <link rel ="stylesheet" TYPE="text/css" HREF="../../../../../stylesheet.css" title="Style">
@@ -31,7 +31,7 @@
 <script type="text/javascript">
 function windowTitle()
 {
-    parent.document.title="org.apache.grails.gradle.publish (grails-publish 0.0.6-SNAPSHOT API)";
+    parent.document.title="org.apache.grails.gradle.publish (grails-publish 1.0.0-SNAPSHOT API)";
 }
 </script>
 <noscript>
@@ -90,6 +90,16 @@ function windowTitle()
                     </tr>
 <tr class="altColor">
                             <td class="colOne">
+                                <strong><a href="AdditionalPublication.html" title="class in org/apache/grails/gradle/publish">
+                                    AdditionalPublication
+                                </a></strong>
+                            </td>
+                            <td>An additional publication published alongside the primary publication under its own Maven
+ coordinate with its own dependency graph — for example a companion `-cli` artifact built from
+ a dedicated source set of the same project.</td>
+                        </tr>
+<tr class="altColor">
+                            <td class="colOne">
                                 <strong><a href="GrailsPublishExtension.html" title="class in org/apache/grails/gradle/publish">
                                     GrailsPublishExtension
                                 </a></strong>
@@ -103,6 +113,15 @@ function windowTitle()
                                 </a></strong>
                             </td>
                             <td>A plugin to ease publishing Grails related artifacts - including source, groovydoc (as javadoc jars), and plugins</td>
+                        </tr>
+<tr class="altColor">
+                            <td class="colOne">
+                                <strong><a href="GrailsRootSoftwareComponent.html" title="class in org/apache/grails/gradle/publish">
+                                    GrailsRootSoftwareComponent
+                                </a></strong>
+                            </td>
+                            <td>Wraps the primary software component when additional publications exist, declaring the
+ additional publications' components as child components.</td>
                         </tr>
 <tr class="altColor">
                             <td class="colOne">
