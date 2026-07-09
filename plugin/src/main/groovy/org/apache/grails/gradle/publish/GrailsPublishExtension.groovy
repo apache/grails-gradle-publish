@@ -136,6 +136,12 @@ class GrailsPublishExtension {
      */
     final Property<Boolean> transitiveDependencies
 
+    /**
+     * Additional publications published alongside the primary publication, each under its own
+     * artifactId with its own dependency graph; registered via {@link #additionalPublication}
+     */
+    final List<AdditionalPublication> additionalPublications = []
+
     private ObjectFactory objects
     private Project project
 
@@ -241,6 +247,40 @@ class GrailsPublishExtension {
         MavenPomDeveloper dev = objects.newInstance(MavenPomDeveloper)
         action.execute(dev)
         developers.add(dev)
+    }
+
+    /**
+     * Registers an additional publication published alongside the primary publication under its
+     * own artifactId, built from a named software component (and source set for the sources &
+     * javadoc jars). By convention the component, source set, and classpath configuration names
+     * all derive from the publication name.
+     *
+     * @param name the publication name, e.g. 'cli'
+     * @param action the configurer
+     */
+    void additionalPublication(String name, Action<? super AdditionalPublication> action) {
+        Objects.requireNonNull(name, 'The additional publication name must not be null')
+        if (additionalPublications.any { it.name == name }) {
+            throw new IllegalArgumentException("An additional publication named `$name` is already registered.")
+        }
+
+        AdditionalPublication publication = new AdditionalPublication(name, objects, project, this)
+        action.execute(publication)
+        additionalPublications.add(publication)
+    }
+
+    /**
+     * Registers an additional publication
+     *
+     * @see #additionalPublication(String, Action)
+     */
+    void additionalPublication(String name, @DelegatesTo(value = AdditionalPublication, strategy = Closure.DELEGATE_FIRST) Closure configurer) {
+        Action<AdditionalPublication> action = { AdditionalPublication publication ->
+            configurer.delegate = publication
+            configurer.resolveStrategy = Closure.DELEGATE_FIRST
+            configurer.call(publication)
+        } as Action<AdditionalPublication>
+        additionalPublication(name, action)
     }
 }
 

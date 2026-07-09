@@ -147,6 +147,61 @@ The credentials and connection url must be specified as a project property or an
 
 By default, a `release` or `snapshot` build is determined by the `project.version` or `projectVersion` gradle property. To override this behavior, use the environment variable `GRAILS_PUBLISH_RELEASE` with a boolean value to indicate if the build is a `release` or `snapshot`.
 
+### Additional Publications
+
+A project can publish companion artifacts under their own Maven coordinates — for example a `-cli`
+artifact built from a dedicated `cli` source set — alongside the primary publication. Each additional
+publication has its own pom & Gradle module metadata, so its dependency graph stays off the primary
+artifact entirely, and it is signed and staged exactly like the primary publication. Sources and
+javadoc (groovydoc for Groovy source sets) jars are created automatically from the publication's
+source set, as required by Maven Central.
+
+The build must supply a software component holding the variants to publish. The typical setup uses a
+[feature variant](https://docs.gradle.org/current/userguide/feature_variants.html) whose configurations
+are exposed through an [adhoc component](https://docs.gradle.org/current/userguide/publishing_customization.html#sec:publishing-custom-components)
+and skipped from the default `java` component:
+
+```groovy
+sourceSets {
+    cli
+}
+
+java {
+    registerFeature('cli') {
+        usingSourceSet(sourceSets.cli)
+        capability(project.group.toString(), "${project.name}-cli", project.version.toString())
+    }
+}
+
+// keep the cli variants out of the primary publication
+components.java.withVariantsFromConfiguration(configurations.cliApiElements) { skip() }
+components.java.withVariantsFromConfiguration(configurations.cliRuntimeElements) { skip() }
+
+// expose the cli variants as their own component named `cli`
+// (requires a small plugin class to inject SoftwareComponentFactory — see
+// src/functionalTest/resources/publish-projects/other-artifacts/additional-publication)
+
+grailsPublish {
+    // ... primary configuration ...
+
+    additionalPublication('cli') {
+        // all optional — the defaults derive from the publication name:
+        artifactId = "${project.name}-cli"   // the published coordinate
+        componentName = 'cli'                // the software component to publish
+        sourceSetName = 'cli'                // used for the sources & javadoc jars
+        desc = 'The cli companion artifact'  // defaults to the primary description
+    }
+}
+```
+
+Because one project now publishes multiple coordinates, the plugin publishes the primary component as
+the root of a component tree with each additional publication's component as a child (the same model
+Kotlin Multiplatform uses). The primary Gradle module metadata therefore lists the additional
+variants as `available-at` redirects to their own coordinates; those variants carry the feature's
+capability, so consumers that do not explicitly request the capability are unaffected. This component
+tree is also what allows Gradle to resolve a project dependency (including a self dependency such as
+`cliApi project(path)`) on a project with multiple publications.
+
 ### Release Signing
 
 `release` builds are expected to be signed by this build. To disable this behavior, add the following Gradle code: 

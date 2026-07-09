@@ -34,7 +34,9 @@ import org.gradle.api.artifacts.ResolvedArtifact
 import org.gradle.api.artifacts.dsl.RepositoryHandler
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import org.gradle.api.artifacts.repositories.PasswordCredentials
+import org.gradle.api.component.SoftwareComponent
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.ExtensionContainer
 import org.gradle.api.plugins.ExtraPropertiesExtension
@@ -48,6 +50,7 @@ import org.gradle.api.provider.Provider
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.publish.PublicationContainer
 import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenArtifact
 import org.gradle.api.publish.maven.MavenPom
 import org.gradle.api.publish.maven.MavenPomDeveloper
 import org.gradle.api.publish.maven.MavenPomDeveloperSpec
@@ -59,11 +62,13 @@ import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.api.tasks.GroovySourceDirectorySet
+import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.TaskContainer
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.javadoc.Groovydoc
+import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.plugins.signing.Sign
 import org.gradle.plugins.signing.SigningExtension
 import org.gradle.plugins.signing.SigningPlugin
@@ -321,6 +326,12 @@ Note: if project properties are used, the properties must be defined prior to ap
                 }
 
                 pe.publications { PublicationContainer publications ->
+                    for (AdditionalPublication additional : gpe.additionalPublications) {
+                        if (additional.name == gpe.publicationName.get()) {
+                            throw new GradleException("Additional publication `${additional.name}` conflicts with the primary publication name. Rename one of the publications.")
+                        }
+                    }
+
                     publications.create(gpe.publicationName.get(), MavenPublication) { MavenPublication publication ->
                         publication.artifactId = gpe.artifactId.get()
                         publication.groupId = gpe.groupId.get()
@@ -332,117 +343,33 @@ Note: if project properties are used, the properties must be defined prior to ap
                                 publication.artifact(extraArtefact)
                             }
 
-                            // Ensure Gradle module metadata includes resolved versions for
-                            // all dependencies. Without this, dependencies declared without
-                            // an explicit version (relying on a platform/BOM) are published
-                            // with no version in the .module file, causing resolution
-                            // failures for consumers since Gradle prefers .module over .pom.
-                            if (!project.extensions.findByType(JavaPlatformExtension)) {
-                                publication.versionMapping { strategy ->
-                                    strategy.usage('java-api') { variant ->
-                                        variant.fromResolutionOf('runtimeClasspath')
-                                    }
-                                    strategy.usage('java-runtime') { variant ->
-                                        variant.fromResolutionResult()
-                                    }
-                                }
-                            }
+                            configureVersionMapping(project, publication, 'runtimeClasspath')
                         }
 
-                        publication.pom { MavenPom pom ->
-                            pom.name.set(gpe.title.get())
-                            pom.description.set(gpe.desc.get())
-                            pom.url.set(gpe.websiteUrl.get())
+                        configurePom(project, gpe, publication, gpe.title, gpe.desc, gpe.pomCustomization,
+                                ['compileClasspath', 'runtimeClasspath',
+                                 'testFixturesCompileClasspath', 'testFixturesRuntimeClasspath'])
+                    }
 
-                            def organization = gpe.organization
-                            if (organization.name.isPresent() || organization.url.isPresent()) {
-                                pom.organization { org ->
-                                    if (organization.name.isPresent()) {
-                                        org.name.set(organization.name)
-                                    }
-                                    if (organization.url.isPresent()) {
-                                        org.url.set(organization.url)
-                                    }
+                    for (AdditionalPublication additional : gpe.additionalPublications) {
+                        publications.create(additional.name, MavenPublication) { MavenPublication publication ->
+                            publication.artifactId = additional.artifactId.get()
+                            publication.groupId = gpe.groupId.get()
+
+                            if (gpe.addComponents.get()) {
+                                String componentName = additional.componentName.get()
+                                def component = project.components.findByName(componentName)
+                                if (component == null) {
+                                    throw new GradleException("Additional publication `${additional.name}` of project `${project.name}` requires a software component named `${componentName}`, but none exists. Create the component (e.g. via SoftwareComponentFactory.adhoc) before the project is evaluated, or set `componentName` to an existing component.")
                                 }
+                                publication.from(component)
+                                attachDocsJars(project, publication, additional)
+
+                                configureVersionMapping(project, publication, additional.runtimeClasspathName.get())
                             }
 
-                            def license = gpe.license
-                            if (license) {
-                                def concreteLicense = License.LICENSES.get(license.name)
-                                if (concreteLicense) {
-                                    pom.licenses { MavenPomLicenseSpec licenses ->
-                                        licenses.license { MavenPomLicense pomLicense ->
-                                            pomLicense.name.set(concreteLicense.name)
-                                            pomLicense.url.set(concreteLicense.url)
-                                            pomLicense.distribution.set(concreteLicense.distribution)
-                                        }
-                                    }
-                                } else if (license.name && license.url) {
-                                    pom.licenses { MavenPomLicenseSpec licenses ->
-                                        licenses.license { MavenPomLicense pomLicense ->
-                                            pomLicense.name.set(license.name)
-                                            pomLicense.url.set(license.url)
-                                            pomLicense.distribution.set(license.distribution)
-                                        }
-                                    }
-                                }
-                            } else {
-                                throw new RuntimeException(createErrorMessage('license'))
-                            }
-
-                            pom.scm { MavenPomScm scm ->
-                                scm.url.set(gpe.scmUrl.get())
-                                scm.connection.set(gpe.scmUrlConnection.get())
-                                scm.developerConnection.set(gpe.scmUrlConnection.get())
-                            }
-
-                            pom.issueManagement { MavenPomIssueManagement issue ->
-                                issue.system.set(gpe.issueTrackerName.get())
-                                issue.url.set(gpe.issueTrackerUrl.get())
-                            }
-
-                            if (gpe.developers) {
-                                pom.developers { MavenPomDeveloperSpec devs ->
-                                    for (MavenPomDeveloper source : gpe.developers.get()) {
-                                        devs.developer { MavenPomDeveloper target ->
-                                            cloneDeveloper(source, target)
-                                        }
-                                    }
-                                }
-                            } else {
-                                throw new RuntimeException(createErrorMessage('developers'))
-                            }
-
-                            pom.withXml { XmlProvider xml ->
-                                Node pomNode = xml.asNode()
-
-                                if (!project.extensions.findByType(JavaPlatformExtension)) {
-                                    // Spring boot dependency management plugin will add the dependencyManagement section,
-                                    // we do not want to publish this information as we will determine the specific versions
-                                    // and set them instead
-                                    NodeList dependencyManagement = (NodeList) pomNode.get('dependencyManagement')
-                                    if (dependencyManagement) {
-                                        dependencyManagement.replaceNode {}
-                                    }
-                                }
-
-                                if (gpe.pomCustomization.isPresent()) {
-                                    Closure pomCustomization = gpe.pomCustomization.get()
-                                    pomCustomization.delegate = pom
-                                    pomCustomization.resolveStrategy = Closure.DELEGATE_FIRST
-                                    pomCustomization.call(xml)
-                                }
-
-                                // fix dependencies without a version, this can occur when the spring dependency management plugin is used
-                                // disabling that plugin will cause gradle to fail on any unresolved, or by disabling the check with:
-                                // https://github.com/gradle/gradle/issues/23030
-                                //tasks.withType(GenerateModuleMetadata).configureEach {
-                                //    suppressedValidationErrors.add('dependencies-without-versions')
-                                //}
-                                if (gpe.transitiveDependencies.get()) {
-                                    setDependencyVersions(pomNode, project)
-                                }
-                            }
+                            configurePom(project, gpe, publication, additional.title, additional.desc, additional.pomCustomization,
+                                    [additional.compileClasspathName.get(), additional.runtimeClasspathName.get()])
                         }
                     }
                 }
@@ -519,7 +446,227 @@ Note: if project properties are used, the properties must be defined prior to ap
         }
     }
 
-    protected void setDependencyVersions(Node pomNode, Project project) {
+    /**
+     * Configures the pom metadata shared by every publication (primary and additional) from the
+     * extension, with the title, description, and pom customization supplied per publication.
+     */
+    protected void configurePom(Project project, GrailsPublishExtension gpe, MavenPublication publication,
+                                Provider<String> title, Provider<String> desc, Provider<Closure> pomCustomization,
+                                List<String> versionResolutionConfigurations) {
+        publication.pom { MavenPom pom ->
+            pom.name.set(title.get())
+            pom.description.set(desc.get())
+            pom.url.set(gpe.websiteUrl.get())
+
+            def organization = gpe.organization
+            if (organization.name.isPresent() || organization.url.isPresent()) {
+                pom.organization { org ->
+                    if (organization.name.isPresent()) {
+                        org.name.set(organization.name)
+                    }
+                    if (organization.url.isPresent()) {
+                        org.url.set(organization.url)
+                    }
+                }
+            }
+
+            def license = gpe.license
+            if (license) {
+                def concreteLicense = License.LICENSES.get(license.name)
+                if (concreteLicense) {
+                    pom.licenses { MavenPomLicenseSpec licenses ->
+                        licenses.license { MavenPomLicense pomLicense ->
+                            pomLicense.name.set(concreteLicense.name)
+                            pomLicense.url.set(concreteLicense.url)
+                            pomLicense.distribution.set(concreteLicense.distribution)
+                        }
+                    }
+                } else if (license.name && license.url) {
+                    pom.licenses { MavenPomLicenseSpec licenses ->
+                        licenses.license { MavenPomLicense pomLicense ->
+                            pomLicense.name.set(license.name)
+                            pomLicense.url.set(license.url)
+                            pomLicense.distribution.set(license.distribution)
+                        }
+                    }
+                }
+            } else {
+                throw new RuntimeException(createErrorMessage('license'))
+            }
+
+            pom.scm { MavenPomScm scm ->
+                scm.url.set(gpe.scmUrl.get())
+                scm.connection.set(gpe.scmUrlConnection.get())
+                scm.developerConnection.set(gpe.scmUrlConnection.get())
+            }
+
+            pom.issueManagement { MavenPomIssueManagement issue ->
+                issue.system.set(gpe.issueTrackerName.get())
+                issue.url.set(gpe.issueTrackerUrl.get())
+            }
+
+            if (gpe.developers) {
+                pom.developers { MavenPomDeveloperSpec devs ->
+                    for (MavenPomDeveloper source : gpe.developers.get()) {
+                        devs.developer { MavenPomDeveloper target ->
+                            cloneDeveloper(source, target)
+                        }
+                    }
+                }
+            } else {
+                throw new RuntimeException(createErrorMessage('developers'))
+            }
+
+            pom.withXml { XmlProvider xml ->
+                Node pomNode = xml.asNode()
+
+                if (!project.extensions.findByType(JavaPlatformExtension)) {
+                    // Spring boot dependency management plugin will add the dependencyManagement section,
+                    // we do not want to publish this information as we will determine the specific versions
+                    // and set them instead
+                    NodeList dependencyManagement = (NodeList) pomNode.get('dependencyManagement')
+                    if (dependencyManagement) {
+                        dependencyManagement.replaceNode {}
+                    }
+                }
+
+                if (pomCustomization.isPresent()) {
+                    Closure customization = pomCustomization.get()
+                    customization.delegate = pom
+                    customization.resolveStrategy = Closure.DELEGATE_FIRST
+                    customization.call(xml)
+                }
+
+                // fix dependencies without a version, this can occur when the spring dependency management plugin is used
+                // disabling that plugin will cause gradle to fail on any unresolved, or by disabling the check with:
+                // https://github.com/gradle/gradle/issues/23030
+                //tasks.withType(GenerateModuleMetadata).configureEach {
+                //    suppressedValidationErrors.add('dependencies-without-versions')
+                //}
+                if (gpe.transitiveDependencies.get()) {
+                    setDependencyVersions(pomNode, project, versionResolutionConfigurations)
+                }
+            }
+        }
+    }
+
+    /**
+     * Ensure Gradle module metadata includes resolved versions for all dependencies. Without this,
+     * dependencies declared without an explicit version (relying on a platform/BOM) are published
+     * with no version in the .module file, causing resolution failures for consumers since Gradle
+     * prefers .module over .pom.
+     */
+    protected static void configureVersionMapping(Project project, MavenPublication publication, String runtimeClasspathName) {
+        if (!project.extensions.findByType(JavaPlatformExtension)) {
+            publication.versionMapping { strategy ->
+                strategy.usage('java-api') { variant ->
+                    variant.fromResolutionOf(runtimeClasspathName)
+                }
+                strategy.usage('java-runtime') { variant ->
+                    variant.fromResolutionResult()
+                }
+            }
+        }
+    }
+
+    /**
+     * Creates (or reuses) the sources and javadoc jars for an additional publication's source set
+     * and attaches them to the publication with the `sources`/`javadoc` classifiers required by
+     * Maven Central. The additional publication's software component must not already contain
+     * sources or javadoc variants.
+     */
+    protected void attachDocsJars(Project project, MavenPublication publication, AdditionalPublication additional) {
+        SourceSetContainer sourceSets = findSourceSets(project)
+        String sourceSetName = additional.sourceSetName.get()
+        SourceSet sourceSet = sourceSets.findByName(sourceSetName)
+        if (sourceSet == null) {
+            throw new GradleException("Additional publication `${additional.name}` of project `${project.name}` requires source set `${sourceSetName}` to build its sources and javadoc jars, but it does not exist. Set `sourceSetName` if the sources live in a differently named source set.")
+        }
+
+        TaskContainer tasks = project.tasks
+
+        TaskProvider<Jar> sourcesJarTask
+        if (tasks.names.contains(sourceSet.sourcesJarTaskName)) {
+            sourcesJarTask = tasks.named(sourceSet.sourcesJarTaskName, Jar)
+        } else {
+            sourcesJarTask = tasks.register(sourceSet.sourcesJarTaskName, Jar) { Jar jar ->
+                configureReproducibleJar(jar)
+                jar.group = BUILD_GROUP
+                jar.duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+                jar.archiveBaseName.set(additional.artifactId)
+                jar.archiveClassifier.set('sources')
+                jar.from(sourceSet.allSource)
+                jar.inputs.files(sourceSet.allSource)
+            }
+        }
+        publication.artifact(sourcesJarTask) { MavenArtifact artifact ->
+            artifact.classifier = 'sources'
+        }
+
+        TaskProvider<Jar> javadocJarTask
+        if (tasks.names.contains(sourceSet.javadocJarTaskName)) {
+            javadocJarTask = tasks.named(sourceSet.javadocJarTaskName, Jar)
+        } else {
+            TaskProvider<? extends Task> docTask = registerDocTask(project, sourceSet)
+            javadocJarTask = tasks.register(sourceSet.javadocJarTaskName, Jar) { Jar jar ->
+                configureReproducibleJar(jar)
+                jar.group = BUILD_GROUP
+                jar.archiveBaseName.set(additional.artifactId)
+                jar.archiveClassifier.set('javadoc')
+                jar.from(docTask)
+            }
+        }
+        publication.artifact(javadocJarTask) { MavenArtifact artifact ->
+            artifact.classifier = 'javadoc'
+        }
+    }
+
+    /**
+     * Registers the documentation task backing an additional publication's javadoc jar —
+     * groovydoc when the source set has Groovy sources (matching how the primary javadoc jar
+     * packages groovydoc), plain javadoc otherwise.
+     */
+    private TaskProvider<? extends Task> registerDocTask(Project project, SourceSet sourceSet) {
+        TaskContainer tasks = project.tasks
+        def groovySources = sourceSet.extensions.findByType(GroovySourceDirectorySet)
+        if (groovySources != null) {
+            String taskName = "${sourceSet.name}Groovydoc"
+            if (tasks.names.contains(taskName)) {
+                return tasks.named(taskName)
+            }
+            return tasks.register(taskName, Groovydoc) { Groovydoc groovydoc ->
+                groovydoc.source(groovySources)
+                // Ensure the java sources are included in the groovydoc, matching the primary javadoc jar
+                groovydoc.source(project.files(sourceSet.java.srcDirs))
+                groovydoc.classpath = sourceSet.compileClasspath
+                groovydoc.destinationDir = project.layout.buildDirectory.dir("docs/${taskName}").get().asFile
+            }
+        }
+
+        String taskName = sourceSet.javadocTaskName
+        if (tasks.names.contains(taskName)) {
+            return tasks.named(taskName)
+        }
+        return tasks.register(taskName, Javadoc) { Javadoc javadoc ->
+            javadoc.source = sourceSet.allJava
+            javadoc.classpath = sourceSet.compileClasspath.plus(sourceSet.output)
+            javadoc.destinationDir = project.layout.buildDirectory.dir("docs/${taskName}").get().asFile
+        }
+    }
+
+    protected static void configureReproducibleJar(Jar jar) {
+        jar.reproducibleFileOrder = true
+        jar.preserveFileTimestamps = false
+        // to avoid platform specific defaults, set the permissions consistently
+        jar.filePermissions { permissions ->
+            permissions.unix(0644)
+        }
+        jar.dirPermissions { permissions ->
+            permissions.unix(0755)
+        }
+    }
+
+    protected void setDependencyVersions(Node pomNode, Project project, List<String> configurationNames) {
         def mavenPomNamespace = 'http://maven.apache.org/POM/4.0.0'
         def dependenciesQName = new QName(mavenPomNamespace, 'dependencies')
         def dependencyQName = new QName(mavenPomNamespace, 'dependency')
@@ -534,11 +681,11 @@ Note: if project properties are used, the properties must be defined prior to ap
         NodeList dependencyNodes = (nodes.get(0) as Node).getAt(dependencyQName) as NodeList
 
         LinkedHashSet<ResolvedArtifact> resolvedArtifacts = []
-        resolvedArtifacts.addAll(project.configurations.getByName('compileClasspath').resolvedConfiguration.resolvedArtifacts)
-        resolvedArtifacts.addAll(project.configurations.getByName('runtimeClasspath').resolvedConfiguration.resolvedArtifacts)
-        if (project.configurations.findByName('testFixturesCompileClasspath') != null) {
-            resolvedArtifacts.addAll(project.configurations.getByName('testFixturesCompileClasspath').resolvedConfiguration.resolvedArtifacts)
-            resolvedArtifacts.addAll(project.configurations.getByName('testFixturesRuntimeClasspath').resolvedConfiguration.resolvedArtifacts)
+        for (String configurationName : configurationNames) {
+            def configuration = project.configurations.findByName(configurationName)
+            if (configuration != null) {
+                resolvedArtifacts.addAll(configuration.resolvedConfiguration.resolvedArtifacts)
+            }
         }
 
         dependencyNodes.findAll { dependencyNode ->
@@ -590,6 +737,9 @@ Note: if project properties are used, the properties must be defined prior to ap
     protected void doAddArtefact(Project project, MavenPublication publication) {
         GrailsPublishExtension gpe = project.extensions.findByType(GrailsPublishExtension)
         if (project.extensions.findByType(JavaPlatformExtension)) {
+            if (gpe.additionalPublications) {
+                throw new RuntimeException('Additional publications are not supported for BOM publishes.')
+            }
             publication.from(project.components.named('javaPlatform').get())
 
             if (gpe.publishTestSources.get()) {
@@ -599,7 +749,25 @@ Note: if project properties are used, the properties must be defined prior to ap
             return
         }
 
-        publication.from project.components.named('java').get()
+        def javaComponent = project.components.named('java').get()
+        if (gpe.additionalPublications) {
+            // Declare the additional publications' components as children of the primary
+            // component so the project's published components form a single tree — the only
+            // shape Gradle can resolve a project dependency against when one project publishes
+            // multiple coordinates (see GrailsRootSoftwareComponent).
+            List<SoftwareComponent> childComponents = gpe.additionalPublications.collect { AdditionalPublication additional ->
+                String componentName = additional.componentName.get()
+                SoftwareComponent component = project.components.findByName(componentName)
+                if (component == null) {
+                    throw new GradleException("Additional publication `${additional.name}` of project `${project.name}` requires a software component named `${componentName}`, but none exists. Create the component (e.g. via SoftwareComponentFactory.adhoc) before the project is evaluated, or set `componentName` to an existing component.")
+                }
+                component
+            }
+            publication.from(new GrailsRootSoftwareComponent((SoftwareComponentInternal) javaComponent, childComponents))
+        } else {
+            publication.from(javaComponent)
+        }
+
         if (gpe.publishTestSources.get()) {
             publication.artifact(project.tasks.named('testSourcesJar', Jar))
         }
@@ -662,15 +830,7 @@ Note: if project properties are used, the properties must be defined prior to ap
         }
 
         tasks.named('javadocJar', Jar).configure { Jar jar ->
-            jar.reproducibleFileOrder = true
-            jar.preserveFileTimestamps = false
-            // to avoid platform specific defaults, set the permissions consistently
-            jar.filePermissions { permissions ->
-                permissions.unix(0644)
-            }
-            jar.dirPermissions { permissions ->
-                permissions.unix(0755)
-            }
+            configureReproducibleJar(jar)
 
             Groovydoc groovyDocTask = tasks.findByName('groovydoc') as Groovydoc
             if (groovyDocTask) {
@@ -688,20 +848,19 @@ Note: if project properties are used, the properties must be defined prior to ap
 
         tasks.named('sourcesJar', Jar).configure { Jar jar ->
             SourceSetContainer sourceSets = GrailsPublishGradlePlugin.findSourceSets(project)
-            jar.reproducibleFileOrder = true
-            jar.preserveFileTimestamps = false
-            // to avoid platform specific defaults, set the permissions consistently
-            jar.filePermissions { permissions ->
-                permissions.unix(0644)
-            }
-            jar.dirPermissions { permissions ->
-                permissions.unix(0755)
-            }
+            configureReproducibleJar(jar)
             jar.duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-            // don't only include main, but any source set
-            jar.from sourceSets.collect { it.allSource }
-            jar.inputs.files(sourceSets.collect { it.allSource })
+            // don't only include main, but any source set — except source sets that are
+            // published separately by an additional publication with their own sources jar
+            GrailsPublishExtension gpe = project.extensions.getByType(GrailsPublishExtension)
+            Set<String> additionalPublicationSourceSets = gpe.additionalPublications
+                    .collect { it.sourceSetName.get() } as Set<String>
+            Collection<SourceSet> publishedSourceSets = sourceSets.findAll { SourceSet sourceSet ->
+                !(sourceSet.name in additionalPublicationSourceSets)
+            }
+            jar.from publishedSourceSets.collect { it.allSource }
+            jar.inputs.files(publishedSourceSets.collect { it.allSource })
         }
 
         project.tasks.register('testSourcesJar', Jar).configure { Jar jar ->
@@ -710,15 +869,7 @@ Note: if project properties are used, the properties must be defined prior to ap
                         !jar.source.files.isEmpty()
             }
             jar.dependsOn('testClasses')
-            jar.reproducibleFileOrder = true
-            jar.preserveFileTimestamps = false
-            // to avoid platform specific defaults, set the permissions consistently
-            jar.filePermissions { permissions ->
-                permissions.unix(0644)
-            }
-            jar.dirPermissions { permissions ->
-                permissions.unix(0755)
-            }
+            configureReproducibleJar(jar)
             SourceSetContainer sourceSets = GrailsPublishGradlePlugin.findSourceSets(project)
             def testSourceSet = sourceSets.named('test').get()
             jar.from(testSourceSet.output)
