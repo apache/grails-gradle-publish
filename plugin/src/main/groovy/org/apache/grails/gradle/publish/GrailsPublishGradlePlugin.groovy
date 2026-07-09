@@ -471,26 +471,26 @@ Note: if project properties are used, the properties must be defined prior to ap
             }
 
             def license = gpe.license
-            if (license) {
-                def concreteLicense = License.LICENSES.get(license.name)
-                if (concreteLicense) {
-                    pom.licenses { MavenPomLicenseSpec licenses ->
-                        licenses.license { MavenPomLicense pomLicense ->
-                            pomLicense.name.set(concreteLicense.name)
-                            pomLicense.url.set(concreteLicense.url)
-                            pomLicense.distribution.set(concreteLicense.distribution)
-                        }
+            def concreteLicense = License.LICENSES.get(license?.name)
+            if (concreteLicense) {
+                pom.licenses { MavenPomLicenseSpec licenses ->
+                    licenses.license { MavenPomLicense pomLicense ->
+                        pomLicense.name.set(concreteLicense.name)
+                        pomLicense.url.set(concreteLicense.url)
+                        pomLicense.distribution.set(concreteLicense.distribution)
                     }
-                } else if (license.name && license.url) {
-                    pom.licenses { MavenPomLicenseSpec licenses ->
-                        licenses.license { MavenPomLicense pomLicense ->
-                            pomLicense.name.set(license.name)
-                            pomLicense.url.set(license.url)
-                            pomLicense.distribution.set(license.distribution)
-                        }
+                }
+            } else if (license?.name && license?.url) {
+                pom.licenses { MavenPomLicenseSpec licenses ->
+                    licenses.license { MavenPomLicense pomLicense ->
+                        pomLicense.name.set(license.name)
+                        pomLicense.url.set(license.url)
+                        pomLicense.distribution.set(license.distribution)
                     }
                 }
             } else {
+                // a known license name, or an explicit name + url pair, is required so the
+                // published pom always carries a <licenses> section
                 throw new RuntimeException(createErrorMessage('license'))
             }
 
@@ -505,9 +505,10 @@ Note: if project properties are used, the properties must be defined prior to ap
                 issue.url.set(gpe.issueTrackerUrl.get())
             }
 
-            if (gpe.developers) {
+            List<MavenPomDeveloper> developers = gpe.developers.getOrElse([])
+            if (developers) {
                 pom.developers { MavenPomDeveloperSpec devs ->
-                    for (MavenPomDeveloper source : gpe.developers.get()) {
+                    for (MavenPomDeveloper source : developers) {
                         devs.developer { MavenPomDeveloper target ->
                             cloneDeveloper(source, target)
                         }
@@ -751,6 +752,9 @@ Note: if project properties are used, the properties must be defined prior to ap
 
         def javaComponent = project.components.named('java').get()
         if (gpe.additionalPublications) {
+            if (!(javaComponent instanceof SoftwareComponentInternal)) {
+                throw new GradleException("Additional publications require the `java` component to implement SoftwareComponentInternal, but it is a ${javaComponent.class.name}. This Gradle version is not supported for additional publications.")
+            }
             // Declare the additional publications' components as children of the primary
             // component so the project's published components form a single tree — the only
             // shape Gradle can resolve a project dependency against when one project publishes

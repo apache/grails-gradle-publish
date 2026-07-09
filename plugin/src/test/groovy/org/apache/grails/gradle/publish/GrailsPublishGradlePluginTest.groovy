@@ -232,6 +232,52 @@ class GrailsPublishGradlePluginTest extends Specification {
         ]
     }
 
+    def 'publishing without a license fails'() {
+        given:
+        def project = ProjectBuilder.builder().withName('test-project').build()
+        project.version = '1.0.0-SNAPSHOT'
+
+        and:
+        project.plugins.apply('org.apache.grails.gradle.grails-publish')
+        project.plugins.apply('java')
+
+        and: 'developers are configured, but no license'
+        GrailsPublishExtension gpe = project.extensions.getByType(GrailsPublishExtension)
+        gpe.githubSlug.set('apache/grails-gradle-publish')
+        gpe.developers = ['jdaugherty': 'James Daugherty']
+
+        when:
+        ((ProjectInternal) project).evaluate()
+
+        then:
+        def ge = thrown(GradleException)
+        causeChainContains(ge, "No 'license' was specified")
+    }
+
+    def 'publishing without developers fails'() {
+        given:
+        def project = ProjectBuilder.builder().withName('test-project').build()
+        project.version = '1.0.0-SNAPSHOT'
+
+        and:
+        project.plugins.apply('org.apache.grails.gradle.grails-publish')
+        project.plugins.apply('java')
+
+        and: 'a license is configured, but the developer list is empty'
+        GrailsPublishExtension gpe = project.extensions.getByType(GrailsPublishExtension)
+        gpe.githubSlug.set('apache/grails-gradle-publish')
+        gpe.license {
+            name = 'Apache-2.0'
+        }
+
+        when:
+        ((ProjectInternal) project).evaluate()
+
+        then:
+        def ge = thrown(GradleException)
+        causeChainContains(ge, "No 'developers' was specified")
+    }
+
     def 'additional publication registers a second publication with its own artifactId and docs jar tasks'() {
         given:
         def project = ProjectBuilder.builder().withName('test-project').build()
