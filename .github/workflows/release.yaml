@@ -473,7 +473,7 @@ jobs:
         run: |
           echo "::group::Update Version on Grails Website"
           echo "Update the released version [${VERSION}] on the Grails Website"
-          echo "https://github.com/apache/grails-static-website/blob/master/buildSrc/src/main/groovy/org/grails/documentation/DownloadPage.groovy#L43"
+          echo "https://github.com/apache/grails-static-website/actions/workflows/release-companion.yml"
           echo "::endgroup::"
       - name: '📧 Announcement Email'
         run: |
