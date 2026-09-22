@@ -43,11 +43,6 @@ dependencies {
     implementation "org.apache.groovy:groovy:$groovyVersion"
 }
 
-java {
-    withSourcesJar()
-    withJavadocJar()
-}
-
 apply plugin: 'org.apache.grails.gradle.grails-publish'
 grailsPublish {
     githubSlug = 'apache/grails-cores'
@@ -62,7 +57,8 @@ grailsPublish {
 }
 
 // As apache/grails-core does for every jar it builds: a duplicate entry is a build failure,
-// not something to resolve silently.
+// not something to resolve silently. Registered with `configureEach` because the publish plugin
+// registers `javadocJar` in an `afterEvaluate`, so the task does not exist yet at this point.
 tasks.withType(Jar).configureEach {
     duplicatesStrategy = DuplicatesStrategy.FAIL
 }

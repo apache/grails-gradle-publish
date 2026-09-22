@@ -23,7 +23,6 @@ import org.gradle.testkit.runner.GradleRunner
 
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.jar.JarFile
 
 class AdditionalPublicationSpec extends GradleSpecification {
 
@@ -130,11 +129,5 @@ class AdditionalPublicationSpec extends GradleSpecification {
         File cliJavadocJar = cliArtifacts.find { it.name.endsWith("-javadoc.jar") }
         cliJavadocJar
         findJarFileEntry("org/grails/example/cli/MyCommand.html", cliJavadocJar)
-    }
-
-    boolean findJarFileEntry(String path, File file) {
-        try (JarFile jarFile = new JarFile(file)) {
-            return jarFile.getEntry(path) != null
-        }
     }
 }

@@ -28,6 +28,7 @@ import spock.lang.Specification
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.jar.JarFile
 
 abstract class GradleSpecification extends Specification {
 
@@ -154,6 +155,19 @@ abstract class GradleSpecification extends Specification {
 
         if (results.keySet().size() != 1) {
             throw new IllegalStateException("Unexpected Task failures: ${results.findAll { it.key != TaskOutcome.SUCCESS }}")
+        }
+    }
+
+    protected boolean findJarFileEntry(String path, File file) {
+        try (JarFile jarFile = new JarFile(file)) {
+            return jarFile.getEntry(path) != null
+        }
+    }
+
+    protected String readJarFileEntry(String path, File file) {
+        try (JarFile jarFile = new JarFile(file)) {
+            def entry = jarFile.getEntry(path)
+            return entry == null ? null : jarFile.getInputStream(entry).getText('UTF-8')
         }
     }
 }

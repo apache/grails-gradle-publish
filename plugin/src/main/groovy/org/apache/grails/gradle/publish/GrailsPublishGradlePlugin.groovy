@@ -38,6 +38,7 @@ import org.gradle.api.component.SoftwareComponent
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.file.DuplicatesStrategy
+import org.gradle.api.file.FileTreeElement
 import org.gradle.api.plugins.ExtensionContainer
 import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.api.plugins.JavaPlatformExtension
@@ -74,6 +75,7 @@ import org.gradle.plugins.signing.SigningExtension
 import org.gradle.plugins.signing.SigningPlugin
 
 import java.lang.reflect.Modifier
+import java.nio.file.Path
 
 import static org.gradle.api.plugins.BasePlugin.BUILD_GROUP
 
@@ -844,9 +846,49 @@ Note: if project properties are used, the properties must be defined prior to ap
                 SourceSetContainer sourceSets = project.extensions.getByType(SourceSetContainer)
                 groovyDocTask.source(project.files(sourceSets.named('main').get().java.srcDirs))
 
-                ConfigurableFileCollection groovyDocFiles = project.files(groovyDocTask.destinationDir)
+                // Read the destination lazily so the jar follows a `groovydoc.destinationDir` that is
+                // retargeted after this block has configured the jar
+                Provider<File> groovyDocDir = project.provider { groovyDocTask.destinationDir }
+                ConfigurableFileCollection groovyDocFiles = project.files(groovyDocDir)
                 jar.from(groovyDocFiles)
                 jar.inputs.files(groovyDocFiles)
+
+                // The `javadoc` task's output is wired into this jar by `withJavadocJar()` - either the
+                // call above, or one the consumer made in their own build script before applying this
+                // plugin - and that wiring cannot be removed afterwards. Keeping the standard tasks in
+                // place is deliberate, since it is what lets the rest of Gradle depend on them; only the
+                // jar's content is swapped for the groovydoc. But `javadoc` is disabled above, and a
+                // disabled task never cleans its output directory, so anything an earlier build left in
+                // `build/docs/javadoc` would still be packaged next to the groovydoc - shipping stale
+                // pages, and failing the jar outright for consumers that set `DuplicatesStrategy.FAIL`.
+                //
+                // A javadoc task that does not run has nothing to contribute, so its contribution is
+                // dropped and the groovydoc replaces it outright. What is dropped is the javadoc tree's
+                // own view of a file, not every file that happens to sit under its destination: within
+                // that tree an element's path is its path below `javadoc.destinationDir`, whereas the
+                // groovydoc `from()` above presents its files at its own root. Comparing the two is what
+                // keeps this exact even when one destination contains the other - excluding by location
+                // alone would either take the groovydoc down with the javadoc and leave an empty jar, or
+                // package it twice. Read lazily, because `javadoc` is disabled after this block has
+                // configured the jar.
+                TaskProvider<Task> javadocTask = tasks.named('javadoc')
+                Provider<Boolean> javadocRuns = project.provider { javadocTask.get().enabled }
+                Provider<File> javadocDir = project.provider {
+                    Task task = javadocTask.get()
+                    task instanceof Javadoc ? ((Javadoc) task).destinationDir : null
+                }
+                jar.exclude { FileTreeElement element ->
+                    if (javadocRuns.get()) {
+                        return false
+                    }
+                    File javadocDestination = javadocDir.orNull
+                    if (javadocDestination == null) {
+                        return false
+                    }
+                    Path javadocRoot = javadocDestination.absoluteFile.toPath().normalize()
+                    Path candidate = element.file.absoluteFile.toPath().normalize()
+                    return candidate == javadocRoot.resolve(element.relativePath.pathString)
+                }
             }
         }
 

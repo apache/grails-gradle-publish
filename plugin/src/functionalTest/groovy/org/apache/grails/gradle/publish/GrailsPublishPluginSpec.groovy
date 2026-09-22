@@ -25,7 +25,6 @@ import spock.lang.PendingFeature
 
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.jar.JarFile
 
 class GrailsPublishPluginSpec extends GradleSpecification {
 
@@ -775,12 +774,6 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         findJarFileEntry("org/grails/example/MyProject.class", classesJar)
     }
 
-    boolean findJarFileEntry(String path, File file) {
-        try (JarFile jarFile = new JarFile(file)) {
-            return jarFile.getEntry(path) != null
-        }
-    }
-
     def "source artifact test - java already configured"() {
         given:
         File tempDir = File.createTempDir("java-already-configured")
@@ -1123,5 +1116,154 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         File classesJar = artifacts.find { it.name.endsWith(".jar") && !it.name.endsWith("javadoc.jar") && !it.name.endsWith("sources.jar") }
         classesJar
         findJarFileEntry("org/grails/example/MyProject.class", classesJar)
+    }
+
+    def "source artifact test - stale javadoc output is kept out of the javadoc jar"() {
+        given:
+        File tempDir = File.createTempDir("stale-javadoc-output")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'stale-javadoc-output')
+
+        and: 'the disabled javadoc task\'s destination directory still holds output from an earlier build'
+        String staleMarker = 'stale javadoc left behind by an earlier build'
+        File staleJavadocDir = new File(runner.projectDir, 'build/docs/javadoc')
+        new File(staleJavadocDir, 'removed').mkdirs()
+        // groovydoc generates a help-doc.html too, so this one collides
+        new File(staleJavadocDir, 'help-doc.html').text = staleMarker
+        // ... and this is a page for a class that no longer exists, which collides with nothing
+        new File(staleJavadocDir, 'removed/DeletedClass.html').text = staleMarker
+
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask("publish", ["--info"], runner)
+
+        then: 'the jar builds, even though a duplicate entry is a failure for it'
+        assertTaskSuccess("javadocJar", result)
+        assertTaskSuccess("groovydoc", result)
+        assertBuildSuccess(result, ["compileJava", "compileGroovy", "processResources", "classes", "jar", "groovydoc", "javadoc", "javadocJar", "sourcesJar", "grailsPublishValidation", "requireMavenPublishUrl", "generateMetadataFileForMavenPublication", "generatePomFileForMavenPublication", "publishMavenPublicationToMavenLocal", "publishToMavenLocal"])
+
+        and:
+        Path artifactDir = tempDir.toPath().resolve("org/grails/example/stale-javadoc-output/0.0.1-SNAPSHOT")
+        Files.exists(artifactDir)
+        File javadocJar = artifactDir.toFile().listFiles().find { it.name.endsWith("javadoc.jar") }
+        javadocJar
+
+        and: 'the groovydoc is packaged'
+        findJarFileEntry("org/grails/example/MyProject.html", javadocJar)
+        findJarFileEntry("DefaultPackage/TestJava.html", javadocJar)
+
+        and: 'nothing from the stale javadoc directory is'
+        !findJarFileEntry("removed/DeletedClass.html", javadocJar)
+        // groovydoc's own help-doc.html must still be there - asserting only that it is not the
+        // stale one would pass just as well on a jar that lost the entry altogether
+        readJarFileEntry("help-doc.html", javadocJar) != null
+        readJarFileEntry("help-doc.html", javadocJar) != staleMarker
+    }
+
+    def "source artifact test - a javadoc destinationDir above the groovydoc still yields a groovydoc-only jar"() {
+        given: 'a project that points javadoc at an ancestor of the groovydoc output directory'
+        File tempDir = File.createTempDir("stale-javadoc-output-ancestor")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'stale-javadoc-output')
+        new File(runner.projectDir, 'build.gradle') << """
+
+tasks.named('javadoc', Javadoc) {
+    destinationDir = file("\${layout.buildDirectory.get().asFile}/docs")
+}
+"""
+
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask("publish", ["--info"], runner)
+
+        then:
+        assertTaskSuccess("javadocJar", result)
+
+        and: 'the groovydoc is still packaged rather than filtered out along with the javadoc'
+        Path artifactDir = tempDir.toPath().resolve("org/grails/example/stale-javadoc-output/0.0.1-SNAPSHOT")
+        File javadocJar = artifactDir.toFile().listFiles().find { it.name.endsWith("javadoc.jar") }
+        javadocJar
+        findJarFileEntry("org/grails/example/MyProject.html", javadocJar)
+        findJarFileEntry("help-doc.html", javadocJar)
+
+        // the javadoc tree walks the groovydoc directory in this configuration; packaging its view of
+        // those files too would duplicate the whole groovydoc under a `groovydoc/` prefix
+        and: 'exactly once'
+        !findJarFileEntry("groovydoc/help-doc.html", javadocJar)
+        !findJarFileEntry("groovydoc/org/grails/example/MyProject.html", javadocJar)
+    }
+
+    def "source artifact test - stale javadoc output is kept out when withJavadocJar was already called"() {
+        given: 'a project that called withJavadocJar() itself before applying the plugin'
+        File tempDir = File.createTempDir("java-already-configured-stale")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'java-already-configured')
+
+        and: 'output an earlier build left in the disabled javadoc task\'s destination directory'
+        String staleMarker = 'stale javadoc left behind by an earlier build'
+        File staleJavadocDir = new File(runner.projectDir, 'build/docs/javadoc')
+        new File(staleJavadocDir, 'removed').mkdirs()
+        new File(staleJavadocDir, 'help-doc.html').text = staleMarker
+        new File(staleJavadocDir, 'removed/DeletedClass.html').text = staleMarker
+
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask("publish", ["--info"], runner)
+
+        then: 'the jar builds, even though a duplicate entry is a failure for it'
+        assertTaskSuccess("javadocJar", result)
+        assertTaskSuccess("groovydoc", result)
+
+        and:
+        Path artifactDir = tempDir.toPath().resolve("org/grails/example/java-already-configured/0.0.1-SNAPSHOT")
+        Files.exists(artifactDir)
+        File javadocJar = artifactDir.toFile().listFiles().find { it.name.endsWith("javadoc.jar") }
+        javadocJar
+
+        and: 'the groovydoc is packaged'
+        findJarFileEntry("org/grails/example/MyProject.html", javadocJar)
+
+        and: 'nothing from the stale javadoc directory is'
+        !findJarFileEntry("removed/DeletedClass.html", javadocJar)
+        readJarFileEntry("help-doc.html", javadocJar) != null
+        readJarFileEntry("help-doc.html", javadocJar) != staleMarker
+    }
+
+    def "assemble builds the javadoc jar for a groovy project"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'stale-javadoc-output')
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+
+        when:
+        def result = executeTask("assemble", ["--configuration-cache"], runner)
+
+        then: 'javadocJar is in the graph - `publish` alone would pass on the publication dependency'
+        assertTaskSuccess("javadocJar", result)
+
+        and: 'and it lands in build/libs, where consumers of the built artifacts look for it'
+        new File(runner.projectDir, 'build/libs').listFiles().any { it.name.endsWith('-javadoc.jar') }
+
+        when: 'the build runs again'
+        // CI runs with `org.gradle.configuration-cache=false`, so without this the jar's task state -
+        // the exclude spec and the providers it reads - is only ever exercised by hand
+        def cachedResult = executeTask("assemble", ["--configuration-cache"], runner)
+
+        then: 'the configuration cache entry is reusable'
+        cachedResult.output.contains('Reusing configuration cache.')
     }
 }
