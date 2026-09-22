@@ -38,6 +38,7 @@ import org.gradle.api.component.SoftwareComponent
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.file.DuplicatesStrategy
+import org.gradle.api.file.FileTreeElement
 import org.gradle.api.plugins.ExtensionContainer
 import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.api.plugins.JavaPlatformExtension
@@ -74,6 +75,7 @@ import org.gradle.plugins.signing.SigningExtension
 import org.gradle.plugins.signing.SigningPlugin
 
 import java.lang.reflect.Modifier
+import java.nio.file.Path
 
 import static org.gradle.api.plugins.BasePlugin.BUILD_GROUP
 
@@ -820,32 +822,12 @@ Note: if project properties are used, the properties must be defined prior to ap
             return
         }
 
-        final TaskContainer tasks = project.tasks
-
-        // Register the javadoc jar before `withJavadocJar()` runs, so that it packages the groovydoc
-        // and nothing else. Gradle only wires `from(javadoc)` into a `javadocJar` it registers itself;
-        // given one that already exists it reuses it as is, while still creating the `javadocElements`
-        // variant and attaching this jar to it. The standard tasks and the published metadata are
-        // therefore unchanged - only the jar's content is swapped, which is the whole intent.
-        //
-        // Letting Gradle register it instead would wire the `javadoc` task's output in permanently, and
-        // that wiring cannot be undone afterwards. `javadoc` is disabled below, and a disabled task
-        // never cleans its output directory, so anything an earlier build left in `build/docs/javadoc`
-        // would be packaged next to the groovydoc - shipping stale pages, and failing the jar outright
-        // for consumers that set `DuplicatesStrategy.FAIL`.
-        if (tasks.names.contains('groovydoc') && !tasks.names.contains('javadocJar')) {
-            tasks.register('javadocJar', Jar) { Jar jar ->
-                jar.group = BUILD_GROUP
-                jar.description = 'Assembles a jar archive containing the groovydoc, published as the javadoc jar.'
-                jar.archiveClassifier.set('javadoc')
-            }
-        }
-
         project.extensions.configure(JavaPluginExtension) {
             it.withJavadocJar()
             it.withSourcesJar()
         }
 
+        final TaskContainer tasks = project.tasks
         tasks.named('javadoc').configure {
             if (tasks.names.contains('groovydoc')) {
                 project.rootProject.logger.info('Configuring javadocJar task for project {} to include groovydoc', project.name)
@@ -866,9 +848,47 @@ Note: if project properties are used, the properties must be defined prior to ap
 
                 // Read the destination lazily so the jar follows a `groovydoc.destinationDir` that is
                 // retargeted after this block has configured the jar
-                ConfigurableFileCollection groovyDocFiles = project.files(project.provider { groovyDocTask.destinationDir })
+                Provider<File> groovyDocDir = project.provider { groovyDocTask.destinationDir }
+                ConfigurableFileCollection groovyDocFiles = project.files(groovyDocDir)
                 jar.from(groovyDocFiles)
                 jar.inputs.files(groovyDocFiles)
+
+                // The `javadoc` task's output is wired into this jar by `withJavadocJar()` - either the
+                // call above, or one the consumer made in their own build script before applying this
+                // plugin - and that wiring cannot be removed afterwards. Keeping the standard tasks in
+                // place is deliberate, since it is what lets the rest of Gradle depend on them; only the
+                // jar's content is swapped for the groovydoc. But `javadoc` is disabled above, and a
+                // disabled task never cleans its output directory, so anything an earlier build left in
+                // `build/docs/javadoc` would still be packaged next to the groovydoc - shipping stale
+                // pages, and failing the jar outright for consumers that set `DuplicatesStrategy.FAIL`.
+                //
+                // A javadoc task that does not run has nothing to contribute, so its destination
+                // directory is kept out of the jar. The groovydoc is exempted explicitly: the two are
+                // siblings by default, but a `javadoc.destinationDir` that contains the groovydoc one
+                // would otherwise take the groovydoc down with it and leave an empty jar. Every value is
+                // read lazily, because `javadoc` is disabled after this block has configured the jar.
+                TaskProvider<Task> javadocTask = tasks.named('javadoc')
+                Provider<Boolean> javadocRuns = project.provider { javadocTask.get().enabled }
+                Provider<File> javadocDir = project.provider {
+                    Task task = javadocTask.get()
+                    task instanceof Javadoc ? ((Javadoc) task).destinationDir : null
+                }
+                jar.exclude { FileTreeElement element ->
+                    if (javadocRuns.get()) {
+                        return false
+                    }
+                    File javadocDestination = javadocDir.orNull
+                    if (javadocDestination == null) {
+                        return false
+                    }
+                    Path candidate = element.file.absoluteFile.toPath()
+                    if (!candidate.startsWith(javadocDestination.absoluteFile.toPath())) {
+                        return false
+                    }
+                    File groovyDocDestination = groovyDocDir.orNull
+                    return groovyDocDestination == null ||
+                            !candidate.startsWith(groovyDocDestination.absoluteFile.toPath())
+                }
             }
         }
 

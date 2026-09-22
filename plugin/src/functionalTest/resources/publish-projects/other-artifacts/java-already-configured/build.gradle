@@ -60,3 +60,9 @@ grailsPublish {
             jdaugherty: 'James Daugherty',
     ]
 }
+
+// As apache/grails-core does for every jar it builds: a duplicate entry is a build failure,
+// not something to resolve silently.
+tasks.withType(Jar).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+}
