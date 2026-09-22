@@ -781,6 +781,13 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         }
     }
 
+    String readJarFileEntry(String path, File file) {
+        try (JarFile jarFile = new JarFile(file)) {
+            def entry = jarFile.getEntry(path)
+            return entry == null ? null : jarFile.getInputStream(entry).getText('UTF-8')
+        }
+    }
+
     def "source artifact test - java already configured"() {
         given:
         File tempDir = File.createTempDir("java-already-configured")
@@ -1123,5 +1130,84 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         File classesJar = artifacts.find { it.name.endsWith(".jar") && !it.name.endsWith("javadoc.jar") && !it.name.endsWith("sources.jar") }
         classesJar
         findJarFileEntry("org/grails/example/MyProject.class", classesJar)
+    }
+
+    def "source artifact test - stale javadoc output is kept out of the javadoc jar"() {
+        given:
+        File tempDir = File.createTempDir("stale-javadoc-output")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'stale-javadoc-output')
+
+        and: 'the disabled javadoc task\'s destination directory still holds output from an earlier build'
+        String staleMarker = 'stale javadoc left behind by an earlier build'
+        File staleJavadocDir = new File(runner.projectDir, 'build/docs/javadoc')
+        new File(staleJavadocDir, 'removed').mkdirs()
+        // groovydoc generates a help-doc.html too, so this one collides
+        new File(staleJavadocDir, 'help-doc.html').text = staleMarker
+        // ... and this is a page for a class that no longer exists, which collides with nothing
+        new File(staleJavadocDir, 'removed/DeletedClass.html').text = staleMarker
+
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask("publish", ["--info"], runner)
+
+        then: 'the jar builds, even though a duplicate entry is a failure for it'
+        assertTaskSuccess("javadocJar", result)
+        assertTaskSuccess("groovydoc", result)
+        assertBuildSuccess(result, ["compileJava", "compileGroovy", "processResources", "classes", "jar", "groovydoc", "javadoc", "javadocJar", "sourcesJar", "grailsPublishValidation", "requireMavenPublishUrl", "generateMetadataFileForMavenPublication", "generatePomFileForMavenPublication", "publishMavenPublicationToMavenLocal", "publishToMavenLocal"])
+
+        and:
+        Path artifactDir = tempDir.toPath().resolve("org/grails/example/stale-javadoc-output/0.0.1-SNAPSHOT")
+        Files.exists(artifactDir)
+        File javadocJar = artifactDir.toFile().listFiles().find { it.name.endsWith("javadoc.jar") }
+        javadocJar
+
+        and: 'the groovydoc is packaged'
+        findJarFileEntry("org/grails/example/MyProject.html", javadocJar)
+        findJarFileEntry("DefaultPackage/TestJava.html", javadocJar)
+
+        and: 'nothing from the stale javadoc directory is'
+        !findJarFileEntry("removed/DeletedClass.html", javadocJar)
+        // groovydoc's own help-doc.html must still be there - asserting only that it is not the
+        // stale one would pass just as well on a jar that lost the entry altogether
+        readJarFileEntry("help-doc.html", javadocJar) != null
+        readJarFileEntry("help-doc.html", javadocJar) != staleMarker
+    }
+
+    def "source artifact test - a javadoc destinationDir above the groovydoc does not empty the jar"() {
+        given: 'a project that points javadoc at an ancestor of the groovydoc output directory'
+        File tempDir = File.createTempDir("stale-javadoc-output-ancestor")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'stale-javadoc-output')
+        new File(runner.projectDir, 'build.gradle') << """
+
+tasks.named('javadoc', Javadoc) {
+    destinationDir = file("\${layout.buildDirectory.get().asFile}/docs")
+}
+"""
+
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask("publish", ["--info"], runner)
+
+        then:
+        assertTaskSuccess("javadocJar", result)
+
+        and: 'the groovydoc is still packaged rather than filtered out along with the javadoc'
+        Path artifactDir = tempDir.toPath().resolve("org/grails/example/stale-javadoc-output/0.0.1-SNAPSHOT")
+        File javadocJar = artifactDir.toFile().listFiles().find { it.name.endsWith("javadoc.jar") }
+        javadocJar
+        findJarFileEntry("org/grails/example/MyProject.html", javadocJar)
+        findJarFileEntry("help-doc.html", javadocJar)
     }
 }

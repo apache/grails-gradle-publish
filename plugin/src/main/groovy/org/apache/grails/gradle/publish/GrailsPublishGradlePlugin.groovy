@@ -820,12 +820,32 @@ Note: if project properties are used, the properties must be defined prior to ap
             return
         }
 
+        final TaskContainer tasks = project.tasks
+
+        // Register the javadoc jar before `withJavadocJar()` runs, so that it packages the groovydoc
+        // and nothing else. Gradle only wires `from(javadoc)` into a `javadocJar` it registers itself;
+        // given one that already exists it reuses it as is, while still creating the `javadocElements`
+        // variant and attaching this jar to it. The standard tasks and the published metadata are
+        // therefore unchanged - only the jar's content is swapped, which is the whole intent.
+        //
+        // Letting Gradle register it instead would wire the `javadoc` task's output in permanently, and
+        // that wiring cannot be undone afterwards. `javadoc` is disabled below, and a disabled task
+        // never cleans its output directory, so anything an earlier build left in `build/docs/javadoc`
+        // would be packaged next to the groovydoc - shipping stale pages, and failing the jar outright
+        // for consumers that set `DuplicatesStrategy.FAIL`.
+        if (tasks.names.contains('groovydoc') && !tasks.names.contains('javadocJar')) {
+            tasks.register('javadocJar', Jar) { Jar jar ->
+                jar.group = BUILD_GROUP
+                jar.description = 'Assembles a jar archive containing the groovydoc, published as the javadoc jar.'
+                jar.archiveClassifier.set('javadoc')
+            }
+        }
+
         project.extensions.configure(JavaPluginExtension) {
             it.withJavadocJar()
             it.withSourcesJar()
         }
 
-        final TaskContainer tasks = project.tasks
         tasks.named('javadoc').configure {
             if (tasks.names.contains('groovydoc')) {
                 project.rootProject.logger.info('Configuring javadocJar task for project {} to include groovydoc', project.name)
