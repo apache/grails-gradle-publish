@@ -1165,7 +1165,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         readJarFileEntry("help-doc.html", javadocJar) != staleMarker
     }
 
-    def "source artifact test - a javadoc destinationDir above the groovydoc does not empty the jar"() {
+    def "source artifact test - a javadoc destinationDir above the groovydoc still yields a groovydoc-only jar"() {
         given: 'a project that points javadoc at an ancestor of the groovydoc output directory'
         File tempDir = File.createTempDir("stale-javadoc-output-ancestor")
         toCleanup << tempDir
@@ -1195,8 +1195,13 @@ tasks.named('javadoc', Javadoc) {
         javadocJar
         findJarFileEntry("org/grails/example/MyProject.html", javadocJar)
         findJarFileEntry("help-doc.html", javadocJar)
-    }
 
+        // the javadoc tree walks the groovydoc directory in this configuration; packaging its view of
+        // those files too would duplicate the whole groovydoc under a `groovydoc/` prefix
+        and: 'exactly once'
+        !findJarFileEntry("groovydoc/help-doc.html", javadocJar)
+        !findJarFileEntry("groovydoc/org/grails/example/MyProject.html", javadocJar)
+    }
 
     def "source artifact test - stale javadoc output is kept out when withJavadocJar was already called"() {
         given: 'a project that called withJavadocJar() itself before applying the plugin'
@@ -1245,12 +1250,20 @@ tasks.named('javadoc', Javadoc) {
         runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
 
         when:
-        def result = executeTask("assemble", [], runner)
+        def result = executeTask("assemble", ["--configuration-cache"], runner)
 
         then: 'javadocJar is in the graph - `publish` alone would pass on the publication dependency'
         assertTaskSuccess("javadocJar", result)
 
         and: 'and it lands in build/libs, where consumers of the built artifacts look for it'
         new File(runner.projectDir, 'build/libs').listFiles().any { it.name.endsWith('-javadoc.jar') }
+
+        when: 'the build runs again'
+        // CI runs with `org.gradle.configuration-cache=false`, so without this the jar's task state -
+        // the exclude spec and the providers it reads - is only ever exercised by hand
+        def cachedResult = executeTask("assemble", ["--configuration-cache"], runner)
+
+        then: 'the configuration cache entry is reusable'
+        cachedResult.output.contains('Reusing configuration cache.')
     }
 }

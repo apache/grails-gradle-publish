@@ -862,11 +862,15 @@ Note: if project properties are used, the properties must be defined prior to ap
                 // `build/docs/javadoc` would still be packaged next to the groovydoc - shipping stale
                 // pages, and failing the jar outright for consumers that set `DuplicatesStrategy.FAIL`.
                 //
-                // A javadoc task that does not run has nothing to contribute, so its destination
-                // directory is kept out of the jar. The groovydoc is exempted explicitly: the two are
-                // siblings by default, but a `javadoc.destinationDir` that contains the groovydoc one
-                // would otherwise take the groovydoc down with it and leave an empty jar. Every value is
-                // read lazily, because `javadoc` is disabled after this block has configured the jar.
+                // A javadoc task that does not run has nothing to contribute, so its contribution is
+                // dropped and the groovydoc replaces it outright. What is dropped is the javadoc tree's
+                // own view of a file, not every file that happens to sit under its destination: within
+                // that tree an element's path is its path below `javadoc.destinationDir`, whereas the
+                // groovydoc `from()` above presents its files at its own root. Comparing the two is what
+                // keeps this exact even when one destination contains the other - excluding by location
+                // alone would either take the groovydoc down with the javadoc and leave an empty jar, or
+                // package it twice. Read lazily, because `javadoc` is disabled after this block has
+                // configured the jar.
                 TaskProvider<Task> javadocTask = tasks.named('javadoc')
                 Provider<Boolean> javadocRuns = project.provider { javadocTask.get().enabled }
                 Provider<File> javadocDir = project.provider {
@@ -881,13 +885,9 @@ Note: if project properties are used, the properties must be defined prior to ap
                     if (javadocDestination == null) {
                         return false
                     }
-                    Path candidate = element.file.absoluteFile.toPath()
-                    if (!candidate.startsWith(javadocDestination.absoluteFile.toPath())) {
-                        return false
-                    }
-                    File groovyDocDestination = groovyDocDir.orNull
-                    return groovyDocDestination == null ||
-                            !candidate.startsWith(groovyDocDestination.absoluteFile.toPath())
+                    Path javadocRoot = javadocDestination.absoluteFile.toPath().normalize()
+                    Path candidate = element.file.absoluteFile.toPath().normalize()
+                    return candidate == javadocRoot.resolve(element.relativePath.pathString)
                 }
             }
         }
