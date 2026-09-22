@@ -25,7 +25,6 @@ import spock.lang.PendingFeature
 
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.jar.JarFile
 
 class GrailsPublishPluginSpec extends GradleSpecification {
 
@@ -773,19 +772,6 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         classesJar
         findJarFileEntry("TestJava.class", classesJar)
         findJarFileEntry("org/grails/example/MyProject.class", classesJar)
-    }
-
-    boolean findJarFileEntry(String path, File file) {
-        try (JarFile jarFile = new JarFile(file)) {
-            return jarFile.getEntry(path) != null
-        }
-    }
-
-    String readJarFileEntry(String path, File file) {
-        try (JarFile jarFile = new JarFile(file)) {
-            def entry = jarFile.getEntry(path)
-            return entry == null ? null : jarFile.getInputStream(entry).getText('UTF-8')
-        }
     }
 
     def "source artifact test - java already configured"() {

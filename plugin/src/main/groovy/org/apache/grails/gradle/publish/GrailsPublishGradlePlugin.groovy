@@ -864,7 +864,9 @@ Note: if project properties are used, the properties must be defined prior to ap
                 SourceSetContainer sourceSets = project.extensions.getByType(SourceSetContainer)
                 groovyDocTask.source(project.files(sourceSets.named('main').get().java.srcDirs))
 
-                ConfigurableFileCollection groovyDocFiles = project.files(groovyDocTask.destinationDir)
+                // Read the destination lazily so the jar follows a `groovydoc.destinationDir` that is
+                // retargeted after this block has configured the jar
+                ConfigurableFileCollection groovyDocFiles = project.files(project.provider { groovyDocTask.destinationDir })
                 jar.from(groovyDocFiles)
                 jar.inputs.files(groovyDocFiles)
             }
