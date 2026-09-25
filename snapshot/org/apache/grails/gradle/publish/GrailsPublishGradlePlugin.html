@@ -285,29 +285,35 @@ implements Plugin&lt;Project&gt;</pre>
                         
                         <tr class="rowColor">
                             <td class="colFirst"><code></code></td>
+                            <td class="colLast"><code>static&nbsp;java.lang.Object</code></td>
+                            <td class="colLast"><code><strong><a href="#findProjectProperty(org.gradle.api.Project, java.lang.String)">findProjectProperty</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String name)</code><br>Finds a project property on the given project or, failing that, on its ancestors.</td>
+                        </tr>
+                        
+                        <tr class="altColor">
+                            <td class="colFirst"><code></code></td>
                             <td class="colLast"><code>protected&nbsp;java.lang.String</code></td>
                             <td class="colLast"><code><strong><a href="#getDefaultClassifier()">getDefaultClassifier</a></strong>()</code><br></td>
                         </tr>
                         
-                        <tr class="altColor">
+                        <tr class="rowColor">
                             <td class="colFirst"><code></code></td>
                             <td class="colLast"><code>protected&nbsp;java.util.Map&lt;java.lang.String, java.lang.String&gt;</code></td>
                             <td class="colLast"><code><strong><a href="#getDefaultExtraArtifact(org.gradle.api.Project)">getDefaultExtraArtifact</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project)</code><br></td>
                         </tr>
                         
-                        <tr class="rowColor">
+                        <tr class="altColor">
                             <td class="colFirst"><code></code></td>
                             <td class="colLast"><code>protected&nbsp;void</code></td>
                             <td class="colLast"><code><strong><a href="#registerValidationTask(org.gradle.api.Project, java.lang.String, groovy.lang.Closure)">registerValidationTask</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String taskName, groovy.lang.Closure c)</code><br></td>
                         </tr>
                         
-                        <tr class="altColor">
+                        <tr class="rowColor">
                             <td class="colFirst"><code></code></td>
                             <td class="colLast"><code>protected&nbsp;void</code></td>
                             <td class="colLast"><code><strong><a href="#setDependencyVersions(groovy.util.Node, org.gradle.api.Project, List)">setDependencyVersions</a></strong>(groovy.util.Node pomNode, <a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.util.List&lt;java.lang.String&gt; configurationNames)</code><br></td>
                         </tr>
                         
-                        <tr class="rowColor">
+                        <tr class="altColor">
                             <td class="colFirst"><code></code></td>
                             <td class="colLast"><code>protected&nbsp;java.lang.Object</code></td>
                             <td class="colLast"><code><strong><a href="#validateProjectPublishable(org.gradle.api.Project)">validateProjectPublishable</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project)</code><br></td>
@@ -515,6 +521,18 @@ implements Plugin&lt;Project&gt;</pre>
                             <li class="blockList">
                                 <h4>protected&nbsp;void <strong>doAddArtefact</strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, <a href='../../../../../org.gradle.api.publish.maven.MavenPublication.html'>MavenPublication</a> publication)</h4>
                                 <p></p>
+                            </li>
+                        </ul>
+                    
+                        <a name="findProjectProperty(org.gradle.api.Project, java.lang.String)"><!-- --></a>
+                        <ul class="blockListLast">
+                            <li class="blockList">
+                                <h4>static&nbsp;java.lang.Object <strong>findProjectProperty</strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String name)</h4>
+                                <p> Finds a project property on the given project or, failing that, on its ancestors.
+
+ Gradle properties (`-P`, `ORG_GRADLE_PROJECT_*` and the root `gradle.properties`) are set on every project,
+ so they are found on the project itself. Walking the ancestors explicitly keeps supporting properties set via
+ `ext` in a parent build script, which Gradle 10 no longer resolves implicitly through Project#findProperty#findProperty.</p>
                             </li>
                         </ul>
                     
