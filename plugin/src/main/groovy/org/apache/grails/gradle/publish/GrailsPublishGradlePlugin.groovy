@@ -906,7 +906,6 @@ Note: if project properties are used, the properties must be defined prior to ap
                 !(sourceSet.name in additionalPublicationSourceSets)
             }
             jar.from publishedSourceSets.collect { it.allSource }
-            jar.inputs.files(publishedSourceSets.collect { it.allSource })
         }
 
         project.tasks.register('testSourcesJar', Jar).configure { Jar jar ->
@@ -919,7 +918,6 @@ Note: if project properties are used, the properties must be defined prior to ap
             SourceSetContainer sourceSets = GrailsPublishGradlePlugin.findSourceSets(project)
             def testSourceSet = sourceSets.named('test').get()
             jar.from(testSourceSet.output)
-            jar.inputs.files(testSourceSet.output)
             jar.archiveClassifier.set('tests')
             jar.group = BUILD_GROUP
         }
@@ -928,7 +926,7 @@ Note: if project properties are used, the properties must be defined prior to ap
         // it's valid to publish boms, profiles, and projects that export only dependencies without any code
         // so for now remove this and let the maven publish plugin fail if conditions aren't met
 //        SourceSetContainer sourceSets = findSourceSets(project)
-//        Collection<SourceSet> publishedSources = sourceSets.findAll { SourceSet sourceSet ->
+//        Collection<SourceSet> publishedSources = sourceSets.matching { SourceSet sourceSet ->
 //            (
 //                    project.extensions.findByType(GrailsPublishExtension).publishTestSources ||
 //                            sourceSet.name != SourceSet.TEST_SOURCE_SET_NAME
