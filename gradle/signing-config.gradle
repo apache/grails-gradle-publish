@@ -28,17 +28,14 @@ if (rootProject.isReleaseVersion) {
 
     afterEvaluate {
         signing {
-            required { rootProject.isReleaseVersion && gradle.taskGraph.hasTask('publish') }
+            // this block only applies to release builds, so a missing signing key must fail the build
+            required = true
             useGpgCmd()
 
             Publication[] publications = new Publication[publishing.publications.size()]
             publishing.publications.findAll().toArray(publications)
             sign(publications)
         }
-    }
-
-    tasks.withType(Sign).configureEach {
-        onlyIf { rootProject.isReleaseVersion }
     }
 
     rootProject.tasks.withType(InitializeNexusStagingRepository).configureEach {
