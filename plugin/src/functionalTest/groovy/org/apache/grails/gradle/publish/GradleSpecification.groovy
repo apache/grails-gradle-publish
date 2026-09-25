@@ -121,7 +121,8 @@ abstract class GradleSpecification extends Specification {
     }
 
     protected BuildResult executeTask(String taskName, List<String> otherArguments = [], GradleRunner gradleRunner) {
-        List arguments = [taskName, "--stacktrace"]
+        // fail on deprecation warnings, so that anything removed in the next major Gradle version is caught early
+        List arguments = [taskName, "--stacktrace", "--warning-mode=fail"]
         arguments.addAll(otherArguments)
 
         gradleRunner.withArguments(arguments).forwardOutput().build()
