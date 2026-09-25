@@ -18,7 +18,7 @@
  */
 
 publishing {
-    if (!isReleaseVersion) {
+    if (!rootProject.isReleaseVersion) {
         repositories {
             maven {
                 credentials {

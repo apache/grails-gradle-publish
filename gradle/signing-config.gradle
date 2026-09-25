@@ -18,7 +18,7 @@
  */
 import io.github.gradlenexus.publishplugin.InitializeNexusStagingRepository
 
-if (isReleaseVersion) {
+if (rootProject.isReleaseVersion) {
 
     apply plugin: 'signing'
 
@@ -28,7 +28,7 @@ if (isReleaseVersion) {
 
     afterEvaluate {
         signing {
-            required { isReleaseVersion && gradle.taskGraph.hasTask('publish') }
+            required { rootProject.isReleaseVersion && gradle.taskGraph.hasTask('publish') }
             useGpgCmd()
 
             Publication[] publications = new Publication[publishing.publications.size()]
@@ -38,7 +38,7 @@ if (isReleaseVersion) {
     }
 
     tasks.withType(Sign).configureEach {
-        onlyIf { isReleaseVersion }
+        onlyIf { rootProject.isReleaseVersion }
     }
 
     rootProject.tasks.withType(InitializeNexusStagingRepository).configureEach {

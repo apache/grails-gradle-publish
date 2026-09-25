@@ -483,7 +483,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         projectDir.resolve('build.gradle').toFile().text = """
             buildscript {
                 repositories {
-                    maven { url "\${System.getenv('LOCAL_MAVEN_PATH')}\" }
+                    maven { url = System.getenv('LOCAL_MAVEN_PATH') }
                     maven { url = 'https://repo.grails.org/grails/restricted' }
                     maven { url = 'https://repository.apache.org/content/groups/snapshots' }
                 }
@@ -492,8 +492,8 @@ class GrailsPublishPluginSpec extends GradleSpecification {
                 }
             }
             
-            version "0.0.1-SNAPSHOT"
-            group "org.grails.example"
+            version = "0.0.1-SNAPSHOT"
+            group = "org.grails.example"
 
             apply plugin: 'java-library'
             apply plugin: 'groovy'
@@ -552,7 +552,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         projectDir.resolve('build.gradle').toFile().text = """
             buildscript {
                 repositories {
-                    maven { url "\${System.getenv('LOCAL_MAVEN_PATH')}\" }
+                    maven { url = System.getenv('LOCAL_MAVEN_PATH') }
                     maven { url = 'https://repo.grails.org/grails/restricted' }
                     maven { url = 'https://repository.apache.org/content/groups/snapshots' }
                 }
@@ -561,7 +561,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
                 }
             }
             
-            version "0.0.1"
+            version = "0.0.1"
             
             apply plugin: 'org.apache.grails.gradle.grails-publish'
         """
@@ -589,7 +589,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         projectDir.resolve('build.gradle').toFile().text = """
             buildscript {
                 repositories {
-                    maven { url "\${System.getenv('LOCAL_MAVEN_PATH')}\" }
+                    maven { url = System.getenv('LOCAL_MAVEN_PATH') }
                     maven { url = 'https://repo.grails.org/grails/restricted' }                    
                     maven { url = 'https://repository.apache.org/content/groups/snapshots' }
                 }
@@ -598,7 +598,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
                 }
             }
             
-            version "0.0.1"
+            version = "0.0.1"
             
             apply plugin: 'java'
             apply plugin: 'org.apache.grails.gradle.grails-publish'

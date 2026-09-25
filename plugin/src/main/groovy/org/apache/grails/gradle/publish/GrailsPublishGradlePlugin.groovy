@@ -902,7 +902,7 @@ Note: if project properties are used, the properties must be defined prior to ap
             GrailsPublishExtension gpe = project.extensions.getByType(GrailsPublishExtension)
             Set<String> additionalPublicationSourceSets = gpe.additionalPublications
                     .collect { it.sourceSetName.get() } as Set<String>
-            Collection<SourceSet> publishedSourceSets = sourceSets.findAll { SourceSet sourceSet ->
+            Collection<SourceSet> publishedSourceSets = sourceSets.matching { SourceSet sourceSet ->
                 !(sourceSet.name in additionalPublicationSourceSets)
             }
             jar.from publishedSourceSets.collect { it.allSource }
