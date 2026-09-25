@@ -152,7 +152,7 @@ class GrailsPublishExtension {
 
         githubSlug = objects.property(String).convention(
                 project.provider {
-                    project.findProperty('githubSlug') as String
+                    GrailsPublishGradlePlugin.findProjectProperty(project, 'githubSlug') as String
                 }
         )
         websiteUrl = objects.property(String).convention(project.provider {

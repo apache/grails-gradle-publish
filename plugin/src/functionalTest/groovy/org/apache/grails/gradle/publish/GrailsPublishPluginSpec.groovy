@@ -1285,4 +1285,26 @@ tasks.named('javadoc', Javadoc) {
         cachedResult.output.contains('Reusing configuration cache.')
         assertTaskSuccess("testSourcesJar", cachedResult)
     }
+
+    def "project properties set via ext in a parent project are used"() {
+        given:
+        File tempDir = File.createTempDir("properties-from-parent-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = addEnvironmentVariable("TEST_PUBLISH_DIR", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask(":subproject:publish", runner)
+
+        then: 'mavenPublishUrl is read from the root project'
+        assertTaskSuccess("publish", result)
+
+        and: 'githubSlug is read from the root project'
+        File pom = tempDir.toPath().resolve("org/grails/example/subproject/0.0.1-SNAPSHOT").toFile()
+                .listFiles().find { it.name.endsWith(".pom") }
+        pom.text.contains("<url>https://github.com/apache/grails-from-parent</url>")
+    }
 }

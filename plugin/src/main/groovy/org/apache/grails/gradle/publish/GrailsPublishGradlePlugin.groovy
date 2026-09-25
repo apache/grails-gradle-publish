@@ -141,23 +141,42 @@ Note: if project properties are used, the properties must be defined prior to ap
 """
     }
 
+    /**
+     * Finds a project property on the given project or, failing that, on its ancestors.
+     *
+     * Gradle properties (`-P`, `ORG_GRADLE_PROJECT_*` and the root `gradle.properties`) are set on every project,
+     * so they are found on the project itself. Walking the ancestors explicitly keeps supporting properties set via
+     * `ext` in a parent build script, which Gradle 10 no longer resolves implicitly through {@link Project#findProperty}.
+     */
+    static Object findProjectProperty(Project project, String name) {
+        for (Project current = project; current != null; current = current.parent) {
+            ExtraPropertiesExtension extraProperties = current.extensions.extraProperties
+            if (extraProperties.has(name)) {
+                return extraProperties.get(name)
+            }
+        }
+        null
+    }
+
     @Override
     void apply(Project project) {
         project.rootProject.logger.info("Applying Grails Publish Gradle Plugin for `${project.name}`...");
         if (project.extensions.findByName('grailsPublish') == null) {
             project.extensions.create('grailsPublish', GrailsPublishExtension)
         }
-        final String nexusPublishUrl = project.findProperty('nexusPublishUrl') ?: System.getenv('NEXUS_PUBLISH_URL') ?: ''
-        final String nexusPublishSnapshotUrl = project.findProperty('nexusPublishSnapshotUrl') ?: System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL') ?: ''
-        final String nexusPublishUsername = project.findProperty('nexusPublishUsername') ?: System.getenv('NEXUS_PUBLISH_USERNAME') ?: ''
-        final String nexusPublishPassword = project.findProperty('nexusPublishPassword') ?: System.getenv('NEXUS_PUBLISH_PASSWORD') ?: ''
-        final String nexusPublishStagingProfileId = project.findProperty('nexusPublishStagingProfileId') ?: System.getenv('NEXUS_PUBLISH_STAGING_PROFILE_ID') ?: ''
-        final String nexusPublishDescription = project.findProperty('nexusPublishDescription') ?: System.getenv('NEXUS_PUBLISH_DESCRIPTION') ?: ''
+        final String nexusPublishUrl = findProjectProperty(project, 'nexusPublishUrl') ?: System.getenv('NEXUS_PUBLISH_URL') ?: ''
+        final String nexusPublishSnapshotUrl = findProjectProperty(project, 'nexusPublishSnapshotUrl') ?: System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL') ?: ''
+        final String nexusPublishUsername = findProjectProperty(project, 'nexusPublishUsername') ?: System.getenv('NEXUS_PUBLISH_USERNAME') ?: ''
+        final String nexusPublishPassword = findProjectProperty(project, 'nexusPublishPassword') ?: System.getenv('NEXUS_PUBLISH_PASSWORD') ?: ''
+        final String nexusPublishStagingProfileId = findProjectProperty(project, 'nexusPublishStagingProfileId') ?: System.getenv('NEXUS_PUBLISH_STAGING_PROFILE_ID') ?: ''
+        final String nexusPublishDescription = findProjectProperty(project, 'nexusPublishDescription') ?: System.getenv('NEXUS_PUBLISH_DESCRIPTION') ?: ''
 
         final ExtraPropertiesExtension extraPropertiesExtension = project.extensions.findByType(ExtraPropertiesExtension)
 
-        PublishType snapshotPublishType = project.hasProperty(SNAPSHOT_PUBLISH_TYPE_PROPERTY) ? PublishType.valueOf(project.property(SNAPSHOT_PUBLISH_TYPE_PROPERTY) as String) : PublishType.MAVEN_PUBLISH
-        PublishType releasePublishType = project.hasProperty(RELEASE_PUBLISH_TYPE_PROPERTY) ? PublishType.valueOf(project.property(RELEASE_PUBLISH_TYPE_PROPERTY) as String) : PublishType.NEXUS_PUBLISH
+        final Object snapshotPublishTypeProperty = findProjectProperty(project, SNAPSHOT_PUBLISH_TYPE_PROPERTY)
+        final Object releasePublishTypeProperty = findProjectProperty(project, RELEASE_PUBLISH_TYPE_PROPERTY)
+        PublishType snapshotPublishType = snapshotPublishTypeProperty != null ? PublishType.valueOf(snapshotPublishTypeProperty as String) : PublishType.MAVEN_PUBLISH
+        PublishType releasePublishType = releasePublishTypeProperty != null ? PublishType.valueOf(releasePublishTypeProperty as String) : PublishType.NEXUS_PUBLISH
 
         boolean isSnapshot, isRelease
         if (System.getenv(ENVIRONMENT_VARIABLE_BASED_RELEASE) != null) {
@@ -167,7 +186,7 @@ Note: if project properties are used, the properties must be defined prior to ap
 
             project.rootProject.logger.lifecycle('Environment Variable `{}` detected - using variable instead of project version.', ENVIRONMENT_VARIABLE_BASED_RELEASE)
         } else {
-            String detectedVersion = (project.version == Project.DEFAULT_VERSION ? (project.findProperty('projectVersion') ?: Project.DEFAULT_VERSION) : project.version) as String
+            String detectedVersion = (project.version == Project.DEFAULT_VERSION ? (findProjectProperty(project, 'projectVersion') ?: Project.DEFAULT_VERSION) : project.version) as String
             if (detectedVersion == Project.DEFAULT_VERSION) {
                 throw new IllegalStateException("Project ${project.name} has an unspecified version (neither `version` or the property `projectVersion` is defined). Release state cannot be determined.")
             }
@@ -206,11 +225,11 @@ Note: if project properties are used, the properties must be defined prior to ap
         projectPluginManager.apply(MavenPublishPlugin)
 
         boolean localSigning = false
-        String signingKeyId = project.findProperty('signing.keyId') ?: System.getenv('SIGNING_KEY')
+        String signingKeyId = findProjectProperty(project, 'signing.keyId') ?: System.getenv('SIGNING_KEY')
         if (isRelease) {
             project.logger.lifecycle('Signing is enabled due to release configuration.')
             extraPropertiesExtension.set('signing.keyId', signingKeyId)
-            String secringFile = project.findProperty('signing.secretKeyRingFile') ?: System.getenv('SIGNING_KEYRING')
+            String secringFile = findProjectProperty(project, 'signing.secretKeyRingFile') ?: System.getenv('SIGNING_KEYRING')
             if (!secringFile) {
                 project.logger.lifecycle('No keyring file (SIGNING_KEYRING) has been specified. Assuming the use of local gpgCommand to sign instead.')
                 localSigning = true
@@ -219,7 +238,7 @@ Note: if project properties are used, the properties must be defined prior to ap
                 project.logger.lifecycle('Keyring file has been specified. Using java to sign.')
                 extraPropertiesExtension.set('signing.secretKeyRingFile', secringFile)
 
-                String signingPassphrase = project.findProperty('signing.password') ?: System.getenv('SIGNING_PASSPHRASE')
+                String signingPassphrase = findProjectProperty(project, 'signing.password') ?: System.getenv('SIGNING_PASSPHRASE')
                 if (signingPassphrase) {
                     extraPropertiesExtension.set('signing.password', signingPassphrase)
                 }
@@ -288,14 +307,14 @@ Note: if project properties are used, the properties must be defined prior to ap
             project.extensions.configure(PublishingExtension) { PublishingExtension pe ->
                 final GrailsPublishExtension gpe = extensionContainer.findByType(GrailsPublishExtension)
 
-                final def mavenPublishUrl = project.findProperty('mavenPublishUrl') ?: System.getenv('MAVEN_PUBLISH_URL')
+                final def mavenPublishUrl = findProjectProperty(project, 'mavenPublishUrl') ?: System.getenv('MAVEN_PUBLISH_URL')
                 if (useMavenPublish) {
                     System.setProperty('org.gradle.internal.publish.checksums.insecure', true as String)
 
                     pe.repositories { RepositoryHandler repoHandler ->
                         repoHandler.maven { MavenArtifactRepository repo ->
-                            final String mavenPublishUsername = project.findProperty('mavenPublishUsername') ?: System.getenv('MAVEN_PUBLISH_USERNAME')
-                            final String mavenPublishPassword = project.findProperty('mavenPublishPassword') ?: System.getenv('MAVEN_PUBLISH_PASSWORD')
+                            final String mavenPublishUsername = findProjectProperty(project, 'mavenPublishUsername') ?: System.getenv('MAVEN_PUBLISH_USERNAME')
+                            final String mavenPublishPassword = findProjectProperty(project, 'mavenPublishPassword') ?: System.getenv('MAVEN_PUBLISH_PASSWORD')
                             if (mavenPublishUsername && mavenPublishPassword) {
                                 repo.credentials { PasswordCredentials credentials ->
                                     credentials.username = mavenPublishUsername
