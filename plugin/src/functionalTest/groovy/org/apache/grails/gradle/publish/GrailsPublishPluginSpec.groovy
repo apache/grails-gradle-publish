@@ -1266,4 +1266,23 @@ tasks.named('javadoc', Javadoc) {
         then: 'the configuration cache entry is reusable'
         cachedResult.output.contains('Reusing configuration cache.')
     }
+
+    def "testSourcesJar is compatible with the configuration cache"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'test-sources')
+
+        when:
+        def result = executeTask("testSourcesJar", ["--configuration-cache", "--configuration-cache-problems=fail"], runner)
+
+        then: 'the onlyIf check runs without needing the project'
+        assertTaskSuccess("testSourcesJar", result)
+        findJarFileEntry("org/grails/example/MyProjectTest.class", new File(runner.projectDir, 'build/libs/test-sources-0.0.1-SNAPSHOT-tests.jar'))
+
+        when: 'the build runs again'
+        def cachedResult = executeTask("testSourcesJar", ["--configuration-cache", "--configuration-cache-problems=fail", "--rerun-tasks"], runner)
+
+        then: 'the configuration cache entry is reusable'
+        cachedResult.output.contains('Reusing configuration cache.')
+        assertTaskSuccess("testSourcesJar", cachedResult)
+    }
 }

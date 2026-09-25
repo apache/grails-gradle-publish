@@ -909,9 +909,10 @@ Note: if project properties are used, the properties must be defined prior to ap
         }
 
         project.tasks.register('testSourcesJar', Jar).configure { Jar jar ->
-            jar.onlyIf {
-                project.extensions.findByType(GrailsPublishExtension).publishTestSources.get() &&
-                        !jar.source.files.isEmpty()
+            // capture the provider at configuration time, the project is not available to onlyIf with the configuration cache
+            Provider<Boolean> publishTestSources = project.extensions.getByType(GrailsPublishExtension).publishTestSources
+            jar.onlyIf { Task task ->
+                publishTestSources.get() && !(task as Jar).source.files.isEmpty()
             }
             jar.dependsOn('testClasses')
             configureReproducibleJar(jar)
