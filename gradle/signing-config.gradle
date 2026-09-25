@@ -18,7 +18,9 @@
  */
 import io.github.gradlenexus.publishplugin.InitializeNexusStagingRepository
 
-if (rootProject.isReleaseVersion) {
+def isReleaseVersion = providers.environmentVariable('GRAILS_PUBLISH_RELEASE').map { Boolean.parseBoolean(it) }.getOrElse(false)
+
+if (isReleaseVersion) {
 
     apply plugin: 'signing'
 

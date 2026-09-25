@@ -17,8 +17,10 @@
  *  under the License.
  */
 
+def isReleaseVersion = providers.environmentVariable('GRAILS_PUBLISH_RELEASE').map { Boolean.parseBoolean(it) }.getOrElse(false)
+
 publishing {
-    if (!rootProject.isReleaseVersion) {
+    if (!isReleaseVersion) {
         repositories {
             maven {
                 credentials {
