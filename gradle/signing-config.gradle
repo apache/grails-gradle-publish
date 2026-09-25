@@ -26,16 +26,12 @@ if (rootProject.isReleaseVersion) {
     ext.set('signing.password', findProperty('signing.password') ?: System.getenv('SIGNING_PASSPHRASE'))
     ext.set('signing.secretKeyRingFile', findProperty('signing.secretKeyRingFile') ?: "${System.properties['user.home']}${File.separator}.gnupg${File.separator}secring.gpg")
 
-    afterEvaluate {
-        signing {
-            // this block only applies to release builds, so a missing signing key must fail the build
-            required = true
-            useGpgCmd()
-
-            Publication[] publications = new Publication[publishing.publications.size()]
-            publishing.publications.findAll().toArray(publications)
-            sign(publications)
-        }
+    signing {
+        // this block only applies to release builds, so a missing signing key must fail the build
+        required = true
+        useGpgCmd()
+        // a live collection, so publications added later (e.g. plugin markers) are signed too
+        sign(publishing.publications)
     }
 
     rootProject.tasks.withType(InitializeNexusStagingRepository).configureEach {
