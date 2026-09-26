@@ -71,7 +71,7 @@ import org.gradle.api.publish.maven.MavenPomLicenseSpec
 import org.gradle.api.publish.maven.MavenPomScm
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
-import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+import org.gradle.api.publish.maven.tasks.AbstractPublishToMaven
 import org.gradle.api.tasks.GroovySourceDirectorySet
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
@@ -467,16 +467,18 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                     it.sign(publishing.publications)
                 }
 
-                // The sign task does not properly setup dependencies, see https://github.com/gradle/gradle/issues/26091
                 project.tasks.withType(Sign).configureEach {
-                    it.dependsOn(project.tasks.withType(Jar))
                     it.doFirst {
                         if (!signingKeyId) {
                             throw new InvalidUserDataException('A signing key is required to sign a release. Set GRAILS_PUBLISH_RELEASE=false to bypass signing.')
                         }
                     }
                 }
-                project.tasks.withType(PublishToMavenRepository).configureEach {
+                // When publications share an artifact, their sign tasks write the same signature file, and Gradle rejects a
+                // publish task reading another publication's signature without an ordering, see
+                // https://github.com/gradle/gradle/issues/26091. The plugin's own publications no longer share artifacts,
+                // but a build can still add one to several publications. This only orders the tasks and adds no work.
+                project.tasks.withType(AbstractPublishToMaven).configureEach {
                     it.mustRunAfter(project.tasks.withType(Sign))
                 }
             }
