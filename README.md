@@ -126,10 +126,15 @@ or
     
 
 By default, this plugin will publish to the specified `MAVEN_PUBLISH` instance for snapshots, and `NEXUS_PUBLISH` for
-releases. To change the snapshot publish behavior, set `snapshotRepoType` to `PublishType.NEXUS_PUBLISH`. To change the
-release publish behavior, set `releaseRepoType` to `PublishType.MAVEN_PUBLISH`.
+releases. To change the snapshot publish behavior, set the property `snapshotPublishType` to `NEXUS_PUBLISH`. To change
+the release publish behavior, set the property `releasePublishType` to `MAVEN_PUBLISH`.
 
 The credentials and connection url must be specified as a project property or an environment variable.
+
+Project properties are read from Gradle properties (`gradle.properties`, `-P` or `ORG_GRADLE_PROJECT_` environment
+variables) or from the project applying the plugin, where they must be set before the plugin is applied. Properties set
+via `ext` on a parent project are not read. If `snapshotPublishType` or `releasePublishType` is only set on a parent
+project, the build fails rather than silently falling back to the default publish type.
 
 `MAVEN_PUBLISH` Environment Variables are:
 
@@ -146,6 +151,13 @@ The credentials and connection url must be specified as a project property or an
     NEXUS_PUBLISH_STAGING_PROFILE_ID
 
 By default, a `release` or `snapshot` build is determined by the `project.version` or `projectVersion` gradle property. To override this behavior, use the environment variable `GRAILS_PUBLISH_RELEASE` with a boolean value to indicate if the build is a `release` or `snapshot`.
+
+### Gradle Plugin Projects
+
+The `java-gradle-plugin` creates its own `pluginMaven` publication, plus a marker publication for each plugin. When it is
+applied, this plugin configures the `pluginMaven` publication instead of creating a second publication with the same
+artifacts: `publicationName` defaults to `pluginMaven` and `addComponents` to `false`. The plugins can be applied in
+either order.
 
 ### Additional Publications
 
@@ -179,7 +191,13 @@ components.java.withVariantsFromConfiguration(configurations.cliRuntimeElements)
 
 // expose the cli variants as their own component named `cli`
 // (requires a small plugin class to inject SoftwareComponentFactory — see
-// src/functionalTest/resources/publish-projects/other-artifacts/additional-publication)
+// plugin/src/functionalTest/resources/publish-projects/other-artifacts/additional-publication)
+// cliComponent.addVariantsFromConfiguration(configurations.cliApiElements) {
+//     if (isDirectoryVariant(it)) { it.skip() } else { it.mapToMavenScope('compile') }
+// }
+// cliComponent.addVariantsFromConfiguration(configurations.cliRuntimeElements) {
+//     if (isDirectoryVariant(it)) { it.skip() } else { it.mapToMavenScope('runtime') }
+// }
 
 grailsPublish {
     // ... primary configuration ...
@@ -193,6 +211,12 @@ grailsPublish {
     }
 }
 ```
+
+A feature's configurations also carry variants for its compiled class and resource directories. The
+`java` component leaves those out, but an adhoc component includes them unless they are skipped, as
+`isDirectoryVariant` does in the example project by checking for the artifact types
+`ArtifactTypeDefinition.JVM_CLASS_DIRECTORY` and `ArtifactTypeDefinition.JVM_RESOURCES_DIRECTORY`. A directory cannot be
+published or signed, so the plugin fails the build when an additional publication's component contains one.
 
 Because one project now publishes multiple coordinates, the plugin publishes the primary component as
 the root of a component tree with each additional publication's component as a child (the same model

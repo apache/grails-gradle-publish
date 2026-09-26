@@ -20,6 +20,7 @@ package org.apache.grails.gradle.publish
 
 import groovy.transform.CompileStatic
 import org.gradle.api.Action
+import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Project
 import org.gradle.api.file.Directory
 import org.gradle.api.model.ObjectFactory
@@ -116,12 +117,14 @@ class GrailsPublishExtension {
     final Property<Closure> pomCustomization
 
     /**
-     * If another process will add the components set this to false so only the publication is created
+     * If another process will add the components set this to false so only the publication is created.
+     * Defaults to false when the java-gradle-plugin is applied, since it adds the components to its pluginMaven publication.
      */
     final Property<Boolean> addComponents
 
     /**
-     * The name of the publication
+     * The name of the publication. Defaults to 'pluginMaven' when the java-gradle-plugin is applied, so its publication
+     * is configured instead of publishing the same artifacts a second time, and to 'maven' otherwise.
      */
     final Property<String> publicationName
 
@@ -152,7 +155,7 @@ class GrailsPublishExtension {
 
         githubSlug = objects.property(String).convention(
                 project.provider {
-                    project.findProperty('githubSlug') as String
+                    GrailsPublishGradlePlugin.findProjectProperty(project, 'githubSlug') as String
                 }
         )
         websiteUrl = objects.property(String).convention(project.provider {
@@ -193,8 +196,12 @@ class GrailsPublishExtension {
         publishTestSources = objects.property(Boolean).convention(false)
         testRepositoryPath = objects.directoryProperty().convention(null as Directory)
         pomCustomization = objects.property(Closure).convention(null as Closure)
-        addComponents = objects.property(Boolean).convention(true)
-        publicationName = objects.property(String).convention('maven')
+        addComponents = objects.property(Boolean).convention(project.provider {
+            !isGradlePluginProject(project)
+        })
+        publicationName = objects.property(String).convention(project.provider {
+            isGradlePluginProject(project) ? 'pluginMaven' : 'maven'
+        })
         transitiveDependencies = objects.property(Boolean).convention(true)
         organization = objects.newInstance(Organization)
     }
@@ -261,7 +268,7 @@ class GrailsPublishExtension {
     void additionalPublication(String name, Action<? super AdditionalPublication> action) {
         Objects.requireNonNull(name, 'The additional publication name must not be null')
         if (additionalPublications.any { it.name == name }) {
-            throw new IllegalArgumentException("An additional publication named `$name` is already registered.")
+            throw new InvalidUserDataException("An additional publication named `$name` is already registered.")
         }
 
         AdditionalPublication publication = new AdditionalPublication(name, objects, project, this)
@@ -282,5 +289,8 @@ class GrailsPublishExtension {
         } as Action<AdditionalPublication>
         additionalPublication(name, action)
     }
-}
 
+    private static boolean isGradlePluginProject(Project project) {
+        project.pluginManager.hasPlugin('java-gradle-plugin')
+    }
+}

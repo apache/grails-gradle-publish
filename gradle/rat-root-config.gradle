@@ -45,7 +45,7 @@ tasks.named('rat') {
             'build/**', // build directories
             'buildSrc/build/**', // build directories
     ] + rootProject.subprojects.collect { "${rootProject.projectDir.relativePath(it.layout.buildDirectory.get().asFile).toString()}/**/*" }
-    // logger.lifecycle("Excludes for RAT task: ${allExcludes.join(', \n')}")
+    // logger.lifecycle('Excludes for RAT task: {}', allExcludes.join(', \n'))
     excludes = allExcludes
     // never cache license audits
     it.outputs.upToDateWhen { false }

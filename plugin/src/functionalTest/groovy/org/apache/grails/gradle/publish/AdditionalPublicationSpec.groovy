@@ -108,6 +108,13 @@ class AdditionalPublicationSpec extends GradleSpecification {
         findJarFileEntry("org/grails/example/cli/MyCommand.class", cliClassesJar)
         !findJarFileEntry("org/grails/example/MyProject.class", cliClassesJar)
 
+        and: "the companion module metadata has the cli variants, but no class or resource directory variants without files"
+        String cliModule = cliArtifacts.find { it.name.endsWith(".module") }.text
+        cliModule.contains('"name": "cliApiElements"')
+        cliModule.contains('"name": "cliRuntimeElements"')
+        !cliModule.contains('ElementsClasses')
+        !cliModule.contains('ElementsResources')
+
         and: "the companion pom carries the cli dependency graph, including the primary coordinate"
         File cliPomFile = cliArtifacts.find { it.name.endsWith(".pom") }
         cliPomFile

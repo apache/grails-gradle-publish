@@ -20,6 +20,7 @@
 package org.apache.grails.gradle.publish
 
 import org.gradle.api.GradleException
+import org.gradle.api.InvalidUserDataException
 import org.gradle.api.component.SoftwareComponentFactory
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.publish.PublishingExtension
@@ -30,6 +31,20 @@ import spock.lang.Specification
 import javax.inject.Inject
 
 class GrailsPublishGradlePluginTest extends Specification {
+
+    def 'findProjectProperty reads the project itself but not its parent projects'() {
+        given:
+        def root = ProjectBuilder.builder().withName('root').build()
+        def child = ProjectBuilder.builder().withName('child').withParent(root).build()
+        root.extensions.extraProperties.set('githubSlug', 'from/root')
+        root.extensions.extraProperties.set('onlyOnRoot', 'from/root')
+        child.extensions.extraProperties.set('githubSlug', 'from/child')
+
+        expect:
+        GrailsPublishGradlePlugin.findProjectProperty(child, 'githubSlug') == 'from/child'
+        GrailsPublishGradlePlugin.findProjectProperty(child, 'onlyOnRoot') == null
+        GrailsPublishGradlePlugin.findProjectProperty(child, 'notSetAnywhere') == null
+    }
 
     def 'requires java or java platform plugin'() {
         given:
@@ -347,6 +362,46 @@ class GrailsPublishGradlePluginTest extends Specification {
         causeChainContains(ge, 'requires a software component named `cli`')
     }
 
+    def 'additional publication fails when its component contains class or resource directories'() {
+        given:
+        def project = ProjectBuilder.builder().withName('test-project').build()
+        project.version = '1.0.0-SNAPSHOT'
+
+        and:
+        project.plugins.apply('org.apache.grails.gradle.grails-publish')
+        project.plugins.apply('groovy')
+        def cliSourceSet = project.sourceSets.create('cli')
+        project.java.registerFeature('cli') {
+            it.usingSourceSet(cliSourceSet)
+        }
+
+        and: 'a cli component that includes the configuration variants without skipping the directories'
+        def componentFactoryHolder = project.objects.newInstance(ComponentFactoryHolder)
+        def cliComponent = componentFactoryHolder.factory.adhoc('cli')
+        project.components.add(cliComponent)
+        cliComponent.addVariantsFromConfiguration(project.configurations.cliApiElements) {
+            it.mapToMavenScope('compile')
+        }
+
+        and:
+        GrailsPublishExtension gpe = project.extensions.getByType(GrailsPublishExtension)
+        gpe.githubSlug.set('apache/grails-gradle-publish')
+        gpe.license {
+            name = 'Apache-2.0'
+        }
+        gpe.developers = ['jdaugherty': 'James Daugherty']
+        gpe.additionalPublication('cli') {
+        }
+
+        when:
+        ((ProjectInternal) project).evaluate()
+
+        then:
+        def ge = thrown(GradleException)
+        causeChainContains(ge, 'Publication `cli` of root project \'test-project\' contains the directory `build/classes/java/cli` from variant `cliApiElementsClasses`')
+        causeChainContains(ge, 'skip the variants whose artifact type is one of java-classes-directory, java-resources-directory')
+    }
+
     def 'additional publication requires its source set to exist'() {
         given:
         def project = ProjectBuilder.builder().withName('test-project').build()
@@ -423,8 +478,8 @@ class GrailsPublishGradlePluginTest extends Specification {
         }
 
         then:
-        def iae = thrown(IllegalArgumentException)
-        iae.message == 'An additional publication named `cli` is already registered.'
+        def iude = thrown(InvalidUserDataException)
+        iude.message == 'An additional publication named `cli` is already registered.'
     }
 
     private static boolean causeChainContains(Throwable throwable, String expected) {
