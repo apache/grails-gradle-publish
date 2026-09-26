@@ -117,12 +117,14 @@ class GrailsPublishExtension {
     final Property<Closure> pomCustomization
 
     /**
-     * If another process will add the components set this to false so only the publication is created
+     * If another process will add the components set this to false so only the publication is created.
+     * Defaults to false when the java-gradle-plugin is applied, since it adds the components to its pluginMaven publication.
      */
     final Property<Boolean> addComponents
 
     /**
-     * The name of the publication
+     * The name of the publication. Defaults to 'pluginMaven' when the java-gradle-plugin is applied, so its publication
+     * is configured instead of publishing the same artifacts a second time, and to 'maven' otherwise.
      */
     final Property<String> publicationName
 
@@ -194,8 +196,12 @@ class GrailsPublishExtension {
         publishTestSources = objects.property(Boolean).convention(false)
         testRepositoryPath = objects.directoryProperty().convention(null as Directory)
         pomCustomization = objects.property(Closure).convention(null as Closure)
-        addComponents = objects.property(Boolean).convention(true)
-        publicationName = objects.property(String).convention('maven')
+        addComponents = objects.property(Boolean).convention(project.provider {
+            !isGradlePluginProject(project)
+        })
+        publicationName = objects.property(String).convention(project.provider {
+            isGradlePluginProject(project) ? 'pluginMaven' : 'maven'
+        })
         transitiveDependencies = objects.property(Boolean).convention(true)
         organization = objects.newInstance(Organization)
     }
@@ -283,5 +289,8 @@ class GrailsPublishExtension {
         } as Action<AdditionalPublication>
         additionalPublication(name, action)
     }
-}
 
+    private static boolean isGradlePluginProject(Project project) {
+        project.pluginManager.hasPlugin('java-gradle-plugin')
+    }
+}

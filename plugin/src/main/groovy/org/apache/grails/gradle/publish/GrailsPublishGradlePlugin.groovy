@@ -26,6 +26,7 @@ import io.github.gradlenexus.publishplugin.NexusPublishExtension
 import io.github.gradlenexus.publishplugin.NexusPublishPlugin
 import io.github.gradlenexus.publishplugin.NexusRepository
 import io.github.gradlenexus.publishplugin.NexusRepositoryContainer
+import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.InvalidUserCodeException
 import org.gradle.api.InvalidUserDataException
@@ -401,7 +402,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                         }
                     }
 
-                    publications.create(gpe.publicationName.get(), MavenPublication) { MavenPublication publication ->
+                    Action<MavenPublication> configurePrimaryPublication = { MavenPublication publication ->
                         publication.artifactId = gpe.artifactId.get()
                         publication.groupId = gpe.groupId.get()
 
@@ -418,6 +419,16 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                         configurePom(project, gpe, publication, gpe.title, gpe.desc, gpe.pomCustomization,
                                 ['compileClasspath', 'runtimeClasspath',
                                  'testFixturesCompileClasspath', 'testFixturesRuntimeClasspath'])
+                    } as Action<MavenPublication>
+
+                    // reuse the publication if it already exists, such as the pluginMaven publication the
+                    // java-gradle-plugin creates when it is applied before this plugin
+                    String primaryPublicationName = gpe.publicationName.get()
+                    MavenPublication existingPublication = publications.findByName(primaryPublicationName) as MavenPublication
+                    if (existingPublication) {
+                        configurePrimaryPublication.execute(existingPublication)
+                    } else {
+                        publications.create(primaryPublicationName, MavenPublication, configurePrimaryPublication)
                     }
 
                     for (AdditionalPublication additional : gpe.additionalPublications) {

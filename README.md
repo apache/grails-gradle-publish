@@ -152,6 +152,13 @@ project, the build fails rather than silently falling back to the default publis
 
 By default, a `release` or `snapshot` build is determined by the `project.version` or `projectVersion` gradle property. To override this behavior, use the environment variable `GRAILS_PUBLISH_RELEASE` with a boolean value to indicate if the build is a `release` or `snapshot`.
 
+### Gradle Plugin Projects
+
+The `java-gradle-plugin` creates its own `pluginMaven` publication, plus a marker publication for each plugin. When it is
+applied, this plugin configures the `pluginMaven` publication instead of creating a second publication with the same
+artifacts: `publicationName` defaults to `pluginMaven` and `addComponents` to `false`. The plugins can be applied in
+either order.
+
 ### Additional Publications
 
 A project can publish companion artifacts under their own Maven coordinates — for example a `-cli`

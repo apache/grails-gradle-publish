@@ -1320,4 +1320,35 @@ tasks.named('javadoc', Javadoc) {
         UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
         bf.buildResult.output.contains("The property `snapshotPublishType` is set on root project 'properties-from-parent-project' but not on project ':subproject'.")
     }
+
+    def "a gradle plugin project publishes through the pluginMaven publication - java-gradle-plugin applied first: #javaGradlePluginFirst"() {
+        given:
+        File tempDir = File.createTempDir("gradle-plugin-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+        if (javaGradlePluginFirst) {
+            runner = addEnvironmentVariable("APPLY_JAVA_GRADLE_PLUGIN_FIRST", "true", runner)
+        }
+
+        when:
+        def result = executeTask("publish", runner)
+
+        then: 'only the pluginMaven publication and the plugin marker are published, not a second copy of the artifacts'
+        result.tasks*.path.findAll { it.startsWith(':publish') && it.endsWith('ToMavenRepository') }.toSet() == [
+                ':publishPluginMavenPublicationToMavenRepository',
+                ':publishExamplePluginMarkerMavenPublicationToMavenRepository',
+        ] as Set
+
+        and: 'the pluginMaven publication is configured by the plugin'
+        File pom = tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile()
+                .listFiles().find { it.name.endsWith(".pom") }
+        pom.text.contains("<description>A testing project for the grails gradle plugin</description>")
+
+        where:
+        javaGradlePluginFirst << [true, false]
+    }
 }
