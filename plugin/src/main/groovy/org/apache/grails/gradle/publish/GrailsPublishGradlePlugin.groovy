@@ -27,6 +27,7 @@ import io.github.gradlenexus.publishplugin.NexusPublishPlugin
 import io.github.gradlenexus.publishplugin.NexusRepository
 import io.github.gradlenexus.publishplugin.NexusRepositoryContainer
 import org.gradle.api.GradleException
+import org.gradle.api.InvalidUserCodeException
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -222,7 +223,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
         } else {
             String detectedVersion = (project.version == Project.DEFAULT_VERSION ? (findProjectProperty(project, 'projectVersion') ?: Project.DEFAULT_VERSION) : project.version) as String
             if (detectedVersion == Project.DEFAULT_VERSION) {
-                throw new IllegalStateException("Project ${project.name} has an unspecified version (neither `version` or the property `projectVersion` is defined). Release state cannot be determined.")
+                throw new InvalidUserDataException("Project ${project.name} has an unspecified version (neither `version` or the property `projectVersion` is defined). Release state cannot be determined.")
             }
             LOG.info('Version {} detected for project {}', detectedVersion, project.name)
 
@@ -383,7 +384,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                 pe.publications { PublicationContainer publications ->
                     for (AdditionalPublication additional : gpe.additionalPublications) {
                         if (additional.name == gpe.publicationName.get()) {
-                            throw new GradleException("Additional publication `${additional.name}` conflicts with the primary publication name. Rename one of the publications.")
+                            throw new InvalidUserDataException("Additional publication `${additional.name}` conflicts with the primary publication name. Rename one of the publications.")
                         }
                     }
 
@@ -415,7 +416,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                                 String componentName = additional.componentName.get()
                                 def component = project.components.findByName(componentName)
                                 if (component == null) {
-                                    throw new GradleException("Additional publication `${additional.name}` of project `${project.name}` requires a software component named `${componentName}`, but none exists. Create the component (e.g. via SoftwareComponentFactory.adhoc) before the project is evaluated, or set `componentName` to an existing component.")
+                                    throw new InvalidUserDataException("Additional publication `${additional.name}` of project `${project.name}` requires a software component named `${componentName}`, but none exists. Create the component (e.g. via SoftwareComponentFactory.adhoc) before the project is evaluated, or set `componentName` to an existing component.")
                                 }
                                 publication.from(component)
                                 attachDocsJars(project, publication, additional)
@@ -446,7 +447,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                     it.dependsOn(project.tasks.withType(Jar))
                     it.doFirst {
                         if (!signingKeyId) {
-                            throw new GradleException('A signing key is required to sign a release. Set GRAILS_PUBLISH_RELEASE=false to bypass signing.')
+                            throw new InvalidUserDataException('A signing key is required to sign a release. Set GRAILS_PUBLISH_RELEASE=false to bypass signing.')
                         }
                     }
                 }
@@ -546,7 +547,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
             } else {
                 // a known license name, or an explicit name + url pair, is required so the
                 // published pom always carries a <licenses> section
-                throw new RuntimeException(createErrorMessage('license'))
+                throw new InvalidUserDataException(createErrorMessage('license'))
             }
 
             pom.scm { MavenPomScm scm ->
@@ -570,7 +571,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                     }
                 }
             } else {
-                throw new RuntimeException(createErrorMessage('developers'))
+                throw new InvalidUserDataException(createErrorMessage('developers'))
             }
 
             pom.withXml { XmlProvider xml ->
@@ -636,7 +637,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
         String sourceSetName = additional.sourceSetName.get()
         SourceSet sourceSet = sourceSets.findByName(sourceSetName)
         if (sourceSet == null) {
-            throw new GradleException("Additional publication `${additional.name}` of project `${project.name}` requires source set `${sourceSetName}` to build its sources and javadoc jars, but it does not exist. Set `sourceSetName` if the sources live in a differently named source set.")
+            throw new InvalidUserDataException("Additional publication `${additional.name}` of project `${project.name}` requires source set `${sourceSetName}` to build its sources and javadoc jars, but it does not exist. Set `sourceSetName` if the sources live in a differently named source set.")
         }
 
         TaskContainer tasks = project.tasks
@@ -757,7 +758,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                         it.moduleVersion.id.name == artifactId
             }?.moduleVersion?.id?.version
             if (!managedVersion) {
-                throw new RuntimeException("No version found for dependency $groupId:$artifactId.")
+                throw new InvalidUserDataException("No version found for dependency $groupId:$artifactId.")
             }
 
             NodeList versionNode = dependencyNode[versionQName]
@@ -794,12 +795,12 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
         GrailsPublishExtension gpe = project.extensions.findByType(GrailsPublishExtension)
         if (project.extensions.findByType(JavaPlatformExtension)) {
             if (gpe.additionalPublications) {
-                throw new RuntimeException('Additional publications are not supported for BOM publishes.')
+                throw new InvalidUserDataException('Additional publications are not supported for BOM publishes.')
             }
             publication.from(project.components.named('javaPlatform').get())
 
             if (gpe.publishTestSources.get()) {
-                throw new RuntimeException('BOM publishes may only contain dependencies.')
+                throw new InvalidUserDataException('BOM publishes may only contain dependencies.')
             }
 
             return
@@ -818,7 +819,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                 String componentName = additional.componentName.get()
                 SoftwareComponent component = project.components.findByName(componentName)
                 if (component == null) {
-                    throw new GradleException("Additional publication `${additional.name}` of project `${project.name}` requires a software component named `${componentName}`, but none exists. Create the component (e.g. via SoftwareComponentFactory.adhoc) before the project is evaluated, or set `componentName` to an existing component.")
+                    throw new InvalidUserDataException("Additional publication `${additional.name}` of project `${project.name}` requires a software component named `${componentName}`, but none exists. Create the component (e.g. via SoftwareComponentFactory.adhoc) before the project is evaluated, or set `componentName` to an existing component.")
                 }
                 component
             }
@@ -868,7 +869,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
         def javaPlatform = project.extensions.findByType(JavaPlatformExtension)
 
         if (!javaPlugin && !javaPlatform) {
-            throw new RuntimeException('Grails Publish Plugin requires the Java Platform or Java Plugin to be applied to the project.')
+            throw new InvalidUserCodeException('Grails Publish Plugin requires the Java Platform or Java Plugin to be applied to the project.')
         }
 
         if (javaPlatform) {
@@ -994,7 +995,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
             Task groovyDocTask = project.tasks.findByName('groovydoc')
             if (groovyDocTask) {
                 if (!groovyDocTask.enabled) {
-                    throw new RuntimeException('Groovydoc task is disabled. Please enable it to ensure javadoc can be published correctly with the Grails Publish Plugin.')
+                    throw new InvalidUserDataException('Groovydoc task is disabled. Please enable it to ensure javadoc can be published correctly with the Grails Publish Plugin.')
                 }
             }
         }

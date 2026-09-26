@@ -20,6 +20,7 @@ package org.apache.grails.gradle.publish
 
 import groovy.transform.CompileStatic
 import org.gradle.api.Action
+import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Project
 import org.gradle.api.file.Directory
 import org.gradle.api.model.ObjectFactory
@@ -261,7 +262,7 @@ class GrailsPublishExtension {
     void additionalPublication(String name, Action<? super AdditionalPublication> action) {
         Objects.requireNonNull(name, 'The additional publication name must not be null')
         if (additionalPublications.any { it.name == name }) {
-            throw new IllegalArgumentException("An additional publication named `$name` is already registered.")
+            throw new InvalidUserDataException("An additional publication named `$name` is already registered.")
         }
 
         AdditionalPublication publication = new AdditionalPublication(name, objects, project, this)

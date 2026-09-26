@@ -20,6 +20,7 @@
 package org.apache.grails.gradle.publish
 
 import org.gradle.api.GradleException
+import org.gradle.api.InvalidUserDataException
 import org.gradle.api.component.SoftwareComponentFactory
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.publish.PublishingExtension
@@ -437,8 +438,8 @@ class GrailsPublishGradlePluginTest extends Specification {
         }
 
         then:
-        def iae = thrown(IllegalArgumentException)
-        iae.message == 'An additional publication named `cli` is already registered.'
+        def iude = thrown(InvalidUserDataException)
+        iude.message == 'An additional publication named `cli` is already registered.'
     }
 
     private static boolean causeChainContains(Throwable throwable, String expected) {
