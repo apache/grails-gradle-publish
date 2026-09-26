@@ -37,6 +37,8 @@ import org.gradle.api.artifacts.dsl.RepositoryHandler
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import org.gradle.api.artifacts.repositories.PasswordCredentials
 import org.gradle.api.configuration.BuildFeatures
+import org.gradle.api.logging.Logger
+import org.gradle.api.logging.Logging
 import org.gradle.api.component.SoftwareComponent
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.internal.component.SoftwareComponentInternal
@@ -88,6 +90,8 @@ import static org.gradle.api.plugins.BasePlugin.BUILD_GROUP
  */
 @CompileStatic
 class GrailsPublishGradlePlugin implements Plugin<Project> {
+
+    private static final Logger LOG = Logging.getLogger(GrailsPublishGradlePlugin)
 
     public static String NEXUS_PUBLISH_PLUGIN_ID = 'io.github.gradle-nexus.publish-plugin'
     public static String MAVEN_PUBLISH_PLUGIN_ID = 'maven-publish'
@@ -190,7 +194,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
 
     @Override
     void apply(Project project) {
-        project.rootProject.logger.info("Applying Grails Publish Gradle Plugin for `${project.name}`...");
+        LOG.info("Applying Grails Publish Gradle Plugin for `${project.name}`...");
         if (project.extensions.findByName('grailsPublish') == null) {
             project.extensions.create('grailsPublish', GrailsPublishExtension)
         }
@@ -214,40 +218,40 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
             isRelease = Boolean.parseBoolean(System.getenv(ENVIRONMENT_VARIABLE_BASED_RELEASE))
             isSnapshot = !isRelease
 
-            project.rootProject.logger.lifecycle('Environment Variable `{}` detected - using variable instead of project version.', ENVIRONMENT_VARIABLE_BASED_RELEASE)
+            LOG.lifecycle('Environment Variable `{}` detected - using variable instead of project version.', ENVIRONMENT_VARIABLE_BASED_RELEASE)
         } else {
             String detectedVersion = (project.version == Project.DEFAULT_VERSION ? (findProjectProperty(project, 'projectVersion') ?: Project.DEFAULT_VERSION) : project.version) as String
             if (detectedVersion == Project.DEFAULT_VERSION) {
                 throw new IllegalStateException("Project ${project.name} has an unspecified version (neither `version` or the property `projectVersion` is defined). Release state cannot be determined.")
             }
-            project.rootProject.logger.info('Version {} detected for project {}', detectedVersion, project.name)
+            LOG.info('Version {} detected for project {}', detectedVersion, project.name)
 
             isSnapshot = detectedVersion.endsWith('SNAPSHOT')
             isRelease = !isSnapshot
 
             if (project.version == Project.DEFAULT_VERSION) {
                 if (isRelease) {
-                    project.rootProject.logger.warn('Project {} does not have a version defined. Using the gradle property `projectVersion` to assume version is {}.', project.name, detectedVersion)
+                    LOG.warn('Project {} does not have a version defined. Using the gradle property `projectVersion` to assume version is {}.', project.name, detectedVersion)
                 } else {
-                    project.rootProject.logger.info('Project {} does not have a version defined. Using the gradle property `projectVersion` to assume version is {}.', project.name, detectedVersion)
+                    LOG.info('Project {} does not have a version defined. Using the gradle property `projectVersion` to assume version is {}.', project.name, detectedVersion)
                 }
             }
         }
 
         if (isSnapshot) {
-            project.rootProject.logger.info('Project {} will be a snapshot.', project.name)
+            LOG.info('Project {} will be a snapshot.', project.name)
         }
         if (isRelease) {
-            project.rootProject.logger.info('Project {} will be a release.', project.name)
+            LOG.info('Project {} will be a release.', project.name)
         }
 
         boolean useMavenPublish = (isSnapshot && snapshotPublishType == PublishType.MAVEN_PUBLISH) || (isRelease && releasePublishType == PublishType.MAVEN_PUBLISH)
         if (useMavenPublish) {
-            project.rootProject.logger.info('Maven Publish is enabled for project {}', project.name)
+            LOG.info('Maven Publish is enabled for project {}', project.name)
         }
         boolean useNexusPublish = (isSnapshot && snapshotPublishType == PublishType.NEXUS_PUBLISH) || (isRelease && releasePublishType == PublishType.NEXUS_PUBLISH)
         if (useNexusPublish) {
-            project.rootProject.logger.info('Nexus Publish is enabled for project {}', project.name)
+            LOG.info('Nexus Publish is enabled for project {}', project.name)
         }
 
         // Required for the pom always
@@ -257,15 +261,15 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
         boolean localSigning = false
         String signingKeyId = findProjectProperty(project, 'signing.keyId') ?: System.getenv('SIGNING_KEY')
         if (isRelease) {
-            project.logger.lifecycle('Signing is enabled due to release configuration.')
+            LOG.lifecycle('Signing is enabled due to release configuration.')
             extraPropertiesExtension.set('signing.keyId', signingKeyId)
             String secringFile = findProjectProperty(project, 'signing.secretKeyRingFile') ?: System.getenv('SIGNING_KEYRING')
             if (!secringFile) {
-                project.logger.lifecycle('No keyring file (SIGNING_KEYRING) has been specified. Assuming the use of local gpgCommand to sign instead.')
+                LOG.lifecycle('No keyring file (SIGNING_KEYRING) has been specified. Assuming the use of local gpgCommand to sign instead.')
                 localSigning = true
                 extraPropertiesExtension.set('signing.gnupg.keyName', signingKeyId)
             } else {
-                project.logger.lifecycle('Keyring file has been specified. Using java to sign.')
+                LOG.lifecycle('Keyring file has been specified. Using java to sign.')
                 extraPropertiesExtension.set('signing.secretKeyRingFile', secringFile)
 
                 String signingPassphrase = findProjectProperty(project, 'signing.password') ?: System.getenv('SIGNING_PASSPHRASE')
@@ -277,7 +281,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
 
         if (isRelease || useNexusPublish) {
             if (project.pluginManager.hasPlugin(SIGNING_PLUGIN_ID)) {
-                project.rootProject.logger.debug('Signing Plugin already applied to project {}', project.name)
+                LOG.debug('Signing Plugin already applied to project {}', project.name)
             } else {
                 projectPluginManager.apply(SigningPlugin)
             }
@@ -294,7 +298,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
             final PluginManager rootProjectPluginManager = project.rootProject.pluginManager
             boolean hasNexusPublishApplied = rootProjectPluginManager.hasPlugin(NEXUS_PUBLISH_PLUGIN_ID)
             if (hasNexusPublishApplied) {
-                project.rootProject.logger.debug('Nexus Publish Plugin already applied to root project')
+                LOG.debug('Nexus Publish Plugin already applied to root project')
             } else {
                 rootProjectPluginManager.apply(NexusPublishPlugin)
             }
@@ -879,7 +883,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
         final TaskContainer tasks = project.tasks
         tasks.named('javadoc').configure {
             if (tasks.names.contains('groovydoc')) {
-                project.rootProject.logger.info('Configuring javadocJar task for project {} to include groovydoc', project.name)
+                LOG.info('Configuring javadocJar task for project {} to include groovydoc', project.name)
                 it.enabled = false
             }
         }
