@@ -52,6 +52,6 @@ subprojects { project ->
             ]
         }
     } else {
-        logger.lifecycle("Not applying grails-publish plugin to project `${project.name}`")
+        logger.lifecycle('Not applying grails-publish plugin to project `{}`', project.name)
     }
 }

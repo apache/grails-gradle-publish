@@ -194,7 +194,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
 
     @Override
     void apply(Project project) {
-        LOG.info("Applying Grails Publish Gradle Plugin for `${project.name}`...");
+        LOG.info('Applying Grails Publish Gradle Plugin for `{}`...', project.name)
         if (project.extensions.findByName('grailsPublish') == null) {
             project.extensions.create('grailsPublish', GrailsPublishExtension)
         }
