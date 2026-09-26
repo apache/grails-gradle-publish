@@ -1286,25 +1286,38 @@ tasks.named('javadoc', Javadoc) {
         assertTaskSuccess("testSourcesJar", cachedResult)
     }
 
-    def "project properties set via ext in a parent project are used"() {
+    def "gradle properties are used by the plugin applied in a subproject"() {
         given:
         File tempDir = File.createTempDir("properties-from-parent-project")
         toCleanup << tempDir
 
         and:
         GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
-        runner = addEnvironmentVariable("TEST_PUBLISH_DIR", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
         runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
 
         when:
         def result = executeTask(":subproject:publish", runner)
 
-        then: 'mavenPublishUrl is read from the root project'
+        then: 'mavenPublishUrl is read from ORG_GRADLE_PROJECT_mavenPublishUrl'
         assertTaskSuccess("publish", result)
 
-        and: 'githubSlug is read from the root project'
+        and: 'githubSlug is read from the root gradle.properties'
         File pom = tempDir.toPath().resolve("org/grails/example/subproject/0.0.1-SNAPSHOT").toFile()
                 .listFiles().find { it.name.endsWith(".pom") }
-        pom.text.contains("<url>https://github.com/apache/grails-from-parent</url>")
+        pom.text.contains("<url>https://github.com/apache/grails-from-gradle-properties</url>")
+    }
+
+    def "a publish type set only on a parent project fails the build"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = addEnvironmentVariable("SET_PUBLISH_TYPE_ON_PARENT", "true", runner)
+
+        when:
+        executeTask(":subproject:assemble", runner)
+
+        then: 'instead of silently publishing with the default publish type'
+        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
+        bf.buildResult.output.contains("The property `snapshotPublishType` is set on root project 'properties-from-parent-project' but not on project ':subproject'.")
     }
 }

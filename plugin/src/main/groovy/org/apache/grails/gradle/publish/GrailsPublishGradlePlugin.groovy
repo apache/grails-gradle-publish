@@ -20,12 +20,14 @@ package org.apache.grails.gradle.publish
 
 import groovy.namespace.QName
 import groovy.transform.CompileStatic
+import groovy.transform.PackageScope
 import io.github.gradlenexus.publishplugin.InitializeNexusStagingRepository
 import io.github.gradlenexus.publishplugin.NexusPublishExtension
 import io.github.gradlenexus.publishplugin.NexusPublishPlugin
 import io.github.gradlenexus.publishplugin.NexusRepository
 import io.github.gradlenexus.publishplugin.NexusRepositoryContainer
 import org.gradle.api.GradleException
+import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
@@ -34,6 +36,7 @@ import org.gradle.api.artifacts.ResolvedArtifact
 import org.gradle.api.artifacts.dsl.RepositoryHandler
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import org.gradle.api.artifacts.repositories.PasswordCredentials
+import org.gradle.api.configuration.BuildFeatures
 import org.gradle.api.component.SoftwareComponent
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.internal.component.SoftwareComponentInternal
@@ -74,6 +77,7 @@ import org.gradle.plugins.signing.Sign
 import org.gradle.plugins.signing.SigningExtension
 import org.gradle.plugins.signing.SigningPlugin
 
+import javax.inject.Inject
 import java.lang.reflect.Modifier
 import java.nio.file.Path
 
@@ -91,6 +95,13 @@ class GrailsPublishGradlePlugin implements Plugin<Project> {
     public static String ENVIRONMENT_VARIABLE_BASED_RELEASE = 'GRAILS_PUBLISH_RELEASE'
     public static String SNAPSHOT_PUBLISH_TYPE_PROPERTY = 'snapshotPublishType'
     public static String RELEASE_PUBLISH_TYPE_PROPERTY = 'releasePublishType'
+
+    private final BuildFeatures buildFeatures
+
+    @Inject
+    GrailsPublishGradlePlugin(BuildFeatures buildFeatures) {
+        this.buildFeatures = buildFeatures
+    }
 
     static String createErrorMessage(String missingSetting) {
         return """No '$missingSetting' was specified. Please provide a valid publishing configuration. Example:
@@ -137,25 +148,44 @@ The credentials and connection url must be specified as a project property or an
 
 When using `NEXUS_PUBLISH`, either the property `signing.secretKeyRingFile` must be set to the path of the GPG keyring file or local gpg must be configured to sign artifacts.
 
-Note: if project properties are used, the properties must be defined prior to applying this plugin.
+Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_PROJECT_ environment variables) or be set on the project applying this plugin, before it is applied. Properties set on parent projects are not read.
 """
     }
 
     /**
-     * Finds a project property on the given project or, failing that, on its ancestors.
+     * Finds a property set via `ext` on the given project itself, or a Gradle property.
      *
-     * Gradle properties (`-P`, `ORG_GRADLE_PROJECT_*` and the root `gradle.properties`) are set on every project,
-     * so they are found on the project itself. Walking the ancestors explicitly keeps supporting properties set via
-     * `ext` in a parent build script, which Gradle 10 no longer resolves implicitly through {@link Project#findProperty}.
+     * The project's own extra properties are checked first, so a value set in its build script overrides a Gradle property,
+     * as it does with {@link Project#findProperty}. Properties set on parent projects are deliberately not read: resolving
+     * them implicitly is removed in Gradle 10, and reading them explicitly is not allowed with Isolated Projects.
      */
+    @PackageScope
     static Object findProjectProperty(Project project, String name) {
-        for (Project current = project; current != null; current = current.parent) {
-            ExtraPropertiesExtension extraProperties = current.extensions.extraProperties
-            if (extraProperties.has(name)) {
-                return extraProperties.get(name)
+        def extraProperties = project.extensions.extraProperties
+        if (extraProperties.has(name)) {
+            return extraProperties.get(name)
+        }
+        project.providers.gradleProperty(name).orNull
+    }
+
+    /**
+     * Finds a publish type property. These fall back to a default when unset, so a value that is only set on a parent
+     * project, which is no longer read, would silently change where artifacts are published. Fail the build instead.
+     */
+    private Object findPublishTypeProperty(Project project, String name) {
+        Object value = findProjectProperty(project, name)
+        // with Isolated Projects, parent projects cannot be inspected, and such builds never relied on reading them
+        if (value == null && !buildFeatures.isolatedProjects.active.get()) {
+            for (Project parent = project.parent; parent != null; parent = parent.parent) {
+                if (parent.extensions.extraProperties.has(name)) {
+                    throw new InvalidUserDataException("The property `${name}` is set on ${parent} but not on ${project}. " +
+                            'The Grails Publish plugin does not read properties from parent projects. ' +
+                            "Set `${name}` in gradle.properties, with -P${name}=..., or in the build script of " +
+                            "${project} before applying the plugin.")
+                }
             }
         }
-        null
+        value
     }
 
     @Override
@@ -173,8 +203,8 @@ Note: if project properties are used, the properties must be defined prior to ap
 
         final ExtraPropertiesExtension extraPropertiesExtension = project.extensions.findByType(ExtraPropertiesExtension)
 
-        final Object snapshotPublishTypeProperty = findProjectProperty(project, SNAPSHOT_PUBLISH_TYPE_PROPERTY)
-        final Object releasePublishTypeProperty = findProjectProperty(project, RELEASE_PUBLISH_TYPE_PROPERTY)
+        final Object snapshotPublishTypeProperty = findPublishTypeProperty(project, SNAPSHOT_PUBLISH_TYPE_PROPERTY)
+        final Object releasePublishTypeProperty = findPublishTypeProperty(project, RELEASE_PUBLISH_TYPE_PROPERTY)
         PublishType snapshotPublishType = snapshotPublishTypeProperty != null ? PublishType.valueOf(snapshotPublishTypeProperty as String) : PublishType.MAVEN_PUBLISH
         PublishType releasePublishType = releasePublishTypeProperty != null ? PublishType.valueOf(releasePublishTypeProperty as String) : PublishType.NEXUS_PUBLISH
 

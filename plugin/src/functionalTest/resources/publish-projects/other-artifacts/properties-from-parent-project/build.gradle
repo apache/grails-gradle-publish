@@ -33,9 +33,10 @@ allprojects {
     }
 }
 
-// read by the plugin applied in the subproject
-ext.githubSlug = 'apache/grails-from-parent'
-ext.mavenPublishUrl = System.getenv('TEST_PUBLISH_DIR')
+// not read by the plugin applied in the subproject, which must fail instead of silently using the default
+if (System.getenv('SET_PUBLISH_TYPE_ON_PARENT')) {
+    ext.snapshotPublishType = 'MAVEN_PUBLISH'
+}
 
 subprojects {
     version = projectVersion

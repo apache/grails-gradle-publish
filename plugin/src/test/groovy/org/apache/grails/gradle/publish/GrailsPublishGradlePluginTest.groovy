@@ -31,6 +31,20 @@ import javax.inject.Inject
 
 class GrailsPublishGradlePluginTest extends Specification {
 
+    def 'findProjectProperty reads the project itself but not its parent projects'() {
+        given:
+        def root = ProjectBuilder.builder().withName('root').build()
+        def child = ProjectBuilder.builder().withName('child').withParent(root).build()
+        root.extensions.extraProperties.set('githubSlug', 'from/root')
+        root.extensions.extraProperties.set('onlyOnRoot', 'from/root')
+        child.extensions.extraProperties.set('githubSlug', 'from/child')
+
+        expect:
+        GrailsPublishGradlePlugin.findProjectProperty(child, 'githubSlug') == 'from/child'
+        GrailsPublishGradlePlugin.findProjectProperty(child, 'onlyOnRoot') == null
+        GrailsPublishGradlePlugin.findProjectProperty(child, 'notSetAnywhere') == null
+    }
+
     def 'requires java or java platform plugin'() {
         given:
         def project = ProjectBuilder.builder().build()
