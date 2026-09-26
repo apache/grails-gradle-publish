@@ -72,3 +72,11 @@ grailsPublish {
             jdaugherty: 'James Daugherty',
     ]
 }
+
+// publish the artifacts through a second publication as well, so the publications share them
+if (System.getenv('PUBLISH_SHARED_ARTIFACTS')) {
+    grailsPublish {
+        publicationName = 'maven'
+        addComponents = true
+    }
+}
