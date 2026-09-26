@@ -135,7 +135,8 @@ extends java.lang.Object</pre>
                         
                         <tr class="altColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.Boolean&gt;</strong></code>&nbsp;</td>
-                            <td class="colLast"><code><a href="#addComponents">addComponents</a></code><br>If another process will add the components set this to false so only the publication is created</td>
+                            <td class="colLast"><code><a href="#addComponents">addComponents</a></code><br>If another process will add the components set this to false so only the publication is created.
+ </td>
                         </tr>
                         
                         <tr class="rowColor">
@@ -206,7 +207,7 @@ extends java.lang.Object</pre>
                         
                         <tr class="altColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.String&gt;</strong></code>&nbsp;</td>
-                            <td class="colLast"><code><a href="#publicationName">publicationName</a></code><br>The name of the publication</td>
+                            <td class="colLast"><code><a href="#publicationName">publicationName</a></code><br>The name of the publication. </td>
                         </tr>
                         
                         <tr class="rowColor">
@@ -400,7 +401,8 @@ extends java.lang.Object</pre>
                         <ul class="blockListLast">
                             <li class="blockList">
                                 <h4>final&nbsp;Property&lt;java.lang.Boolean&gt; <strong>addComponents</strong></h4>
-                                <p> If another process will add the components set this to false so only the publication is created</p>
+                                <p> If another process will add the components set this to false so only the publication is created.
+ Defaults to false when the java-gradle-plugin is applied, since it adds the components to its pluginMaven publication.</p>
                             </li>
                         </ul>
                     
@@ -513,7 +515,8 @@ extends java.lang.Object</pre>
                         <ul class="blockListLast">
                             <li class="blockList">
                                 <h4>final&nbsp;Property&lt;java.lang.String&gt; <strong>publicationName</strong></h4>
-                                <p> The name of the publication</p>
+                                <p> The name of the publication. Defaults to 'pluginMaven' when the java-gradle-plugin is applied, so its publication
+ is configured instead of publishing the same artifacts a second time, and to 'maven' otherwise.</p>
                             </li>
                         </ul>
                     

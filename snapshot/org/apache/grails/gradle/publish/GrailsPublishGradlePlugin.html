@@ -202,7 +202,7 @@ implements Plugin&lt;Project&gt;</pre>
                         
                         <tr class="altColor">
                             <td class="colFirst">
-                                <code><strong><a href="#GrailsPublishGradlePlugin()">GrailsPublishGradlePlugin</a></strong>()</code><br></td>
+                                <code><strong><a href="#GrailsPublishGradlePlugin(org.gradle.api.configuration.BuildFeatures)">GrailsPublishGradlePlugin</a></strong>(<a href='../../../../../org.gradle.api.configuration.BuildFeatures.html'>BuildFeatures</a> buildFeatures)</code><br></td>
                         </tr>
                         
                     </table>
@@ -285,26 +285,27 @@ implements Plugin&lt;Project&gt;</pre>
                         
                         <tr class="rowColor">
                             <td class="colFirst"><code></code></td>
-                            <td class="colLast"><code>static&nbsp;java.lang.Object</code></td>
-                            <td class="colLast"><code><strong><a href="#findProjectProperty(org.gradle.api.Project, java.lang.String)">findProjectProperty</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String name)</code><br>Finds a project property on the given project or, failing that, on its ancestors.</td>
-                        </tr>
-                        
-                        <tr class="altColor">
-                            <td class="colFirst"><code></code></td>
                             <td class="colLast"><code>protected&nbsp;java.lang.String</code></td>
                             <td class="colLast"><code><strong><a href="#getDefaultClassifier()">getDefaultClassifier</a></strong>()</code><br></td>
                         </tr>
                         
-                        <tr class="rowColor">
+                        <tr class="altColor">
                             <td class="colFirst"><code></code></td>
                             <td class="colLast"><code>protected&nbsp;java.util.Map&lt;java.lang.String, java.lang.String&gt;</code></td>
                             <td class="colLast"><code><strong><a href="#getDefaultExtraArtifact(org.gradle.api.Project)">getDefaultExtraArtifact</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project)</code><br></td>
                         </tr>
                         
-                        <tr class="altColor">
+                        <tr class="rowColor">
                             <td class="colFirst"><code></code></td>
                             <td class="colLast"><code>protected&nbsp;void</code></td>
                             <td class="colLast"><code><strong><a href="#registerValidationTask(org.gradle.api.Project, java.lang.String, groovy.lang.Closure)">registerValidationTask</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String taskName, groovy.lang.Closure c)</code><br></td>
+                        </tr>
+                        
+                        <tr class="altColor">
+                            <td class="colFirst"><code></code></td>
+                            <td class="colLast"><code>static&nbsp;void</code></td>
+                            <td class="colLast"><code><strong><a href="#requireNoDirectoryArtifacts(org.gradle.api.Project, java.lang.String, org.gradle.api.component.SoftwareComponent)">requireNoDirectoryArtifacts</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String publicationName, <a href='../../../../../org.gradle.api.component.SoftwareComponent.html'>SoftwareComponent</a> component)</code><br>A component built with addVariantsFromConfiguration includes the class and resource directory variants of the
+ configuration unless they are skipped. </td>
                         </tr>
                         
                         <tr class="rowColor">
@@ -424,10 +425,10 @@ implements Plugin&lt;Project&gt;</pre>
                 </a>
                     <h3>Constructor Detail</h3>
                     
-                        <a name="GrailsPublishGradlePlugin()"><!-- --></a>
+                        <a name="GrailsPublishGradlePlugin(org.gradle.api.configuration.BuildFeatures)"><!-- --></a>
                         <ul class="blockListLast">
                             <li class="blockList">
-                                <h4><strong>GrailsPublishGradlePlugin</strong>()</h4>
+                                <h4>@javax.inject.Inject<br><strong>GrailsPublishGradlePlugin</strong>(<a href='../../../../../org.gradle.api.configuration.BuildFeatures.html'>BuildFeatures</a> buildFeatures)</h4>
                                 <p></p>
                             </li>
                         </ul>
@@ -524,18 +525,6 @@ implements Plugin&lt;Project&gt;</pre>
                             </li>
                         </ul>
                     
-                        <a name="findProjectProperty(org.gradle.api.Project, java.lang.String)"><!-- --></a>
-                        <ul class="blockListLast">
-                            <li class="blockList">
-                                <h4>static&nbsp;java.lang.Object <strong>findProjectProperty</strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String name)</h4>
-                                <p> Finds a project property on the given project or, failing that, on its ancestors.
-
- Gradle properties (`-P`, `ORG_GRADLE_PROJECT_*` and the root `gradle.properties`) are set on every project,
- so they are found on the project itself. Walking the ancestors explicitly keeps supporting properties set via
- `ext` in a parent build script, which Gradle 10 no longer resolves implicitly through Project#findProperty#findProperty.</p>
-                            </li>
-                        </ul>
-                    
                         <a name="getDefaultClassifier()"><!-- --></a>
                         <ul class="blockListLast">
                             <li class="blockList">
@@ -557,6 +546,16 @@ implements Plugin&lt;Project&gt;</pre>
                             <li class="blockList">
                                 <h4>protected&nbsp;void <strong>registerValidationTask</strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String taskName, groovy.lang.Closure c)</h4>
                                 <p></p>
+                            </li>
+                        </ul>
+                    
+                        <a name="requireNoDirectoryArtifacts(org.gradle.api.Project, java.lang.String, org.gradle.api.component.SoftwareComponent)"><!-- --></a>
+                        <ul class="blockListLast">
+                            <li class="blockList">
+                                <h4>static&nbsp;void <strong>requireNoDirectoryArtifacts</strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String publicationName, <a href='../../../../../org.gradle.api.component.SoftwareComponent.html'>SoftwareComponent</a> component)</h4>
+                                <p> A component built with addVariantsFromConfiguration includes the class and resource directory variants of the
+ configuration unless they are skipped. Maven publishing silently leaves the directories out, publishing variants
+ without files, and signing fails on them, so fail early with a message explaining the fix.</p>
                             </li>
                         </ul>
                     
