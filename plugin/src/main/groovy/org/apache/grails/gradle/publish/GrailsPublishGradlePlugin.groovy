@@ -33,7 +33,9 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.XmlProvider
+import org.gradle.api.artifacts.PublishArtifact
 import org.gradle.api.artifacts.ResolvedArtifact
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.artifacts.dsl.RepositoryHandler
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import org.gradle.api.artifacts.repositories.PasswordCredentials
@@ -41,6 +43,7 @@ import org.gradle.api.configuration.BuildFeatures
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
 import org.gradle.api.component.SoftwareComponent
+import org.gradle.api.component.SoftwareComponentVariant
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.file.DuplicatesStrategy
@@ -100,6 +103,16 @@ class GrailsPublishGradlePlugin implements Plugin<Project> {
     public static String ENVIRONMENT_VARIABLE_BASED_RELEASE = 'GRAILS_PUBLISH_RELEASE'
     public static String SNAPSHOT_PUBLISH_TYPE_PROPERTY = 'snapshotPublishType'
     public static String RELEASE_PUBLISH_TYPE_PROPERTY = 'releasePublishType'
+
+    /**
+     * Artifact types of the class and resource directory variants Gradle creates for a source set. The java
+     * component leaves them out, since a directory cannot be published.
+     */
+    private static final Set<String> DIRECTORY_ARTIFACT_TYPES = [
+            ArtifactTypeDefinition.JVM_CLASS_DIRECTORY,
+            ArtifactTypeDefinition.JVM_RESOURCES_DIRECTORY,
+            ArtifactTypeDefinition.DIRECTORY_TYPE,
+    ] as Set<String>
 
     private final BuildFeatures buildFeatures
 
@@ -418,6 +431,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                                 if (component == null) {
                                     throw new InvalidUserDataException("Additional publication `${additional.name}` of project `${project.name}` requires a software component named `${componentName}`, but none exists. Create the component (e.g. via SoftwareComponentFactory.adhoc) before the project is evaluated, or set `componentName` to an existing component.")
                                 }
+                                requireNoDirectoryArtifacts(project, additional.name, component)
                                 publication.from(component)
                                 attachDocsJars(project, publication, additional)
 
@@ -463,6 +477,26 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
             }
 
             addInstallTaskAliases(project)
+        }
+    }
+
+    /**
+     * A component built with addVariantsFromConfiguration includes the class and resource directory variants of the
+     * configuration unless they are skipped. Maven publishing silently leaves the directories out, publishing variants
+     * without files, and signing fails on them, so fail early with a message explaining the fix.
+     */
+    static void requireNoDirectoryArtifacts(Project project, String publicationName, SoftwareComponent component) {
+        if (!(component instanceof SoftwareComponentInternal)) {
+            return
+        }
+        for (SoftwareComponentVariant variant : ((SoftwareComponentInternal) component).usages) {
+            PublishArtifact directory = variant.artifacts.find { PublishArtifact artifact -> artifact.type in DIRECTORY_ARTIFACT_TYPES }
+            if (directory) {
+                throw new InvalidUserDataException("Publication `${publicationName}` of ${project} contains the directory " +
+                        "`${project.relativePath(directory.file)}` from variant `${variant.name}` of component `${component.name}`, " +
+                        'which cannot be published. When adding variants with addVariantsFromConfiguration, skip the variants ' +
+                        "whose artifact type is one of ${DIRECTORY_ARTIFACT_TYPES.join(', ')}, as the java component does.")
+            }
         }
     }
 

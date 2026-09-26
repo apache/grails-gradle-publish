@@ -66,10 +66,26 @@ abstract class CliComponentPlugin implements Plugin<Project> {
         def cliComponent = softwareComponentFactory.adhoc('cli')
         project.components.add(cliComponent)
         cliComponent.addVariantsFromConfiguration(project.configurations.cliApiElements) {
-            it.mapToMavenScope('compile')
+            if (isDirectoryVariant(it)) {
+                it.skip()
+            } else {
+                it.mapToMavenScope('compile')
+            }
         }
         cliComponent.addVariantsFromConfiguration(project.configurations.cliRuntimeElements) {
-            it.mapToMavenScope('runtime')
+            if (isDirectoryVariant(it)) {
+                it.skip()
+            } else {
+                it.mapToMavenScope('runtime')
+            }
+        }
+    }
+
+    // Like the java component, leave out the class and resource directory variants of the
+    // configurations, which cannot be published
+    static boolean isDirectoryVariant(ConfigurationVariantDetails details) {
+        details.configurationVariant.artifacts.any {
+            it.type in [ArtifactTypeDefinition.JVM_CLASS_DIRECTORY, ArtifactTypeDefinition.JVM_RESOURCES_DIRECTORY]
         }
     }
 }

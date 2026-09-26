@@ -184,7 +184,13 @@ components.java.withVariantsFromConfiguration(configurations.cliRuntimeElements)
 
 // expose the cli variants as their own component named `cli`
 // (requires a small plugin class to inject SoftwareComponentFactory — see
-// src/functionalTest/resources/publish-projects/other-artifacts/additional-publication)
+// plugin/src/functionalTest/resources/publish-projects/other-artifacts/additional-publication)
+// cliComponent.addVariantsFromConfiguration(configurations.cliApiElements) {
+//     if (isDirectoryVariant(it)) { it.skip() } else { it.mapToMavenScope('compile') }
+// }
+// cliComponent.addVariantsFromConfiguration(configurations.cliRuntimeElements) {
+//     if (isDirectoryVariant(it)) { it.skip() } else { it.mapToMavenScope('runtime') }
+// }
 
 grailsPublish {
     // ... primary configuration ...
@@ -198,6 +204,12 @@ grailsPublish {
     }
 }
 ```
+
+A feature's configurations also carry variants for its compiled class and resource directories. The
+`java` component leaves those out, but an adhoc component includes them unless they are skipped, as
+`isDirectoryVariant` does in the example project by checking for the artifact types
+`ArtifactTypeDefinition.JVM_CLASS_DIRECTORY` and `ArtifactTypeDefinition.JVM_RESOURCES_DIRECTORY`. A directory cannot be
+published or signed, so the plugin fails the build when an additional publication's component contains one.
 
 Because one project now publishes multiple coordinates, the plugin publishes the primary component as
 the root of a component tree with each additional publication's component as a child (the same model

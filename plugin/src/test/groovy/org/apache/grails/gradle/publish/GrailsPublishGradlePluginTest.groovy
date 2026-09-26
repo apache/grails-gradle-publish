@@ -362,6 +362,46 @@ class GrailsPublishGradlePluginTest extends Specification {
         causeChainContains(ge, 'requires a software component named `cli`')
     }
 
+    def 'additional publication fails when its component contains class or resource directories'() {
+        given:
+        def project = ProjectBuilder.builder().withName('test-project').build()
+        project.version = '1.0.0-SNAPSHOT'
+
+        and:
+        project.plugins.apply('org.apache.grails.gradle.grails-publish')
+        project.plugins.apply('groovy')
+        def cliSourceSet = project.sourceSets.create('cli')
+        project.java.registerFeature('cli') {
+            it.usingSourceSet(cliSourceSet)
+        }
+
+        and: 'a cli component that includes the configuration variants without skipping the directories'
+        def componentFactoryHolder = project.objects.newInstance(ComponentFactoryHolder)
+        def cliComponent = componentFactoryHolder.factory.adhoc('cli')
+        project.components.add(cliComponent)
+        cliComponent.addVariantsFromConfiguration(project.configurations.cliApiElements) {
+            it.mapToMavenScope('compile')
+        }
+
+        and:
+        GrailsPublishExtension gpe = project.extensions.getByType(GrailsPublishExtension)
+        gpe.githubSlug.set('apache/grails-gradle-publish')
+        gpe.license {
+            name = 'Apache-2.0'
+        }
+        gpe.developers = ['jdaugherty': 'James Daugherty']
+        gpe.additionalPublication('cli') {
+        }
+
+        when:
+        ((ProjectInternal) project).evaluate()
+
+        then:
+        def ge = thrown(GradleException)
+        causeChainContains(ge, 'Publication `cli` of root project \'test-project\' contains the directory `build/classes/java/cli` from variant `cliApiElementsClasses`')
+        causeChainContains(ge, 'skip the variants whose artifact type is one of java-classes-directory, java-resources-directory')
+    }
+
     def 'additional publication requires its source set to exist'() {
         given:
         def project = ProjectBuilder.builder().withName('test-project').build()
