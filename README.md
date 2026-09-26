@@ -126,8 +126,8 @@ or
     
 
 By default, this plugin will publish to the specified `MAVEN_PUBLISH` instance for snapshots, and `NEXUS_PUBLISH` for
-releases. To change the snapshot publish behavior, set `snapshotRepoType` to `PublishType.NEXUS_PUBLISH`. To change the
-release publish behavior, set `releaseRepoType` to `PublishType.MAVEN_PUBLISH`.
+releases. To change the snapshot publish behavior, set the property `snapshotPublishType` to `NEXUS_PUBLISH`. To change
+the release publish behavior, set the property `releasePublishType` to `MAVEN_PUBLISH`.
 
 The credentials and connection url must be specified as a project property or an environment variable.
 
