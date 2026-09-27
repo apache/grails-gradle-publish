@@ -72,6 +72,7 @@ import org.gradle.api.publish.maven.MavenPomScm
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
 import org.gradle.api.publish.maven.tasks.AbstractPublishToMaven
+import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.GroovySourceDirectorySet
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
@@ -412,7 +413,7 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                             doAddArtefact(project, publication)
                             def extraArtefact = getDefaultExtraArtifact(project)
                             if (extraArtefact) {
-                                publication.artifact(extraArtefact)
+                                addExtraArtifact(project, publication, extraArtefact)
                             }
 
                             configureVersionMapping(project, publication, 'runtimeClasspath')
@@ -911,6 +912,28 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                 classifier: getDefaultClassifier(),
                 extension : 'xml'
         ] : null
+    }
+
+    /**
+     * The extra artifact usually lives in a classes directory, such as META-INF/grails-plugin.xml. Publishing it from
+     * there would write its signature into that directory, which other tasks read, such as the jar tasks, so publish a
+     * copy instead.
+     */
+    private static void addExtraArtifact(Project project, MavenPublication publication, Map<String, String> extraArtifact) {
+        File source = new File(extraArtifact.source)
+        TaskProvider<Copy> copyTask = project.tasks.register('grailsPublishExtraArtifact', Copy) { Copy copy ->
+            copy.from(source)
+            copy.into(project.layout.buildDirectory.dir('grails-publish/extra-artifact'))
+            // the file is written by the task producing the classes directory it lives in, and the jar tasks package
+            // those directories, so depending on them builds it
+            copy.dependsOn(project.tasks.withType(Jar))
+        }
+        Provider<File> copied = copyTask.map { Copy copy -> new File(copy.destinationDir, source.name) }
+        publication.artifact(copied) { MavenArtifact artifact ->
+            artifact.classifier = extraArtifact.classifier
+            artifact.extension = extraArtifact.extension
+            artifact.builtBy(copyTask)
+        }
     }
 
     protected String getDefaultClassifier() {

@@ -101,6 +101,36 @@ class ReleaseSigningSpec extends GradleSpecification {
         'gradle-plugin-project'  | [PUBLISH_SHARED_ARTIFACTS: 'true']       | 'publications sharing artifacts'
     }
 
+    def "a signed release publishes the grails-plugin.xml without signing it inside the classes directory"() {
+        given:
+        File repository = File.createTempDir('release-repository')
+        toCleanup << repository
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'grails-plugin-project')
+        runner = setGradleProperty('projectVersion', '0.0.1', runner)
+        runner = setGradleProperty('releasePublishType', 'MAVEN_PUBLISH', runner)
+        runner = setGradleProperty('mavenPublishUrl', repository.absolutePath, runner)
+        runner = addEnvironmentVariable('GRAILS_PUBLISH_RELEASE', 'true', runner)
+        runner = addEnvironmentVariable('PATH', System.getenv('PATH'), runner)
+        runner = addEnvironmentVariable('GNUPGHOME', gnupgHome.toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable('SIGNING_KEY', keyId, runner)
+
+        and: 'the grails-plugin.xml exists, as the plugin only publishes it when it does at configuration time'
+        executeTask('classes', runner)
+
+        when:
+        executeTask('publish', runner)
+
+        then: 'the grails-plugin.xml is published and signed'
+        File publishedPluginXml = new File(repository, 'org/grails/example/grails-plugin-project/0.0.1/grails-plugin-project-0.0.1-plugin.xml')
+        publishedPluginXml.text == '<plugin name="grails-plugin-project"/>'
+        new File("${publishedPluginXml.path}.asc").exists()
+
+        and: 'its signature is not written into the classes directory, which other tasks read'
+        !new File(runner.projectDir, 'build/classes/groovy/main/META-INF/grails-plugin.xml.asc').exists()
+    }
+
     private static List<File> publishedFiles(File directory) {
         List<File> files = []
         directory.eachFileRecurse { File file ->
