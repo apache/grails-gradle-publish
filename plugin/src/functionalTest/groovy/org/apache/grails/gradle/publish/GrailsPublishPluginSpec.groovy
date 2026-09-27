@@ -1444,9 +1444,10 @@ publishing {
         !result.output.contains(":testClasses")
     }
 
-    def "a Nexus URL set only on a parent project fails the build"() {
+    def "a Nexus URL set only on a parent project fails a build publishing through Nexus"() {
         given:
         GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = setGradleProperty("snapshotPublishType", "NEXUS_PUBLISH", runner)
         new File(runner.projectDir, 'build.gradle') << """
 ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
 """
@@ -1462,8 +1463,12 @@ ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
     def "a Nexus URL set on a parent project is ignored when the environment variable is set"() {
         given:
         GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = setGradleProperty("snapshotPublishType", "NEXUS_PUBLISH", runner)
         runner = addEnvironmentVariable("NEXUS_PUBLISH_URL", "https://nexus.example.invalid/service/local/", runner)
         new File(runner.projectDir, 'build.gradle') << """
+// the Nexus plugin must be applied to the root project before the subprojects are evaluated
+apply plugin: 'io.github.gradle-nexus.publish-plugin'
+
 ext.nexusPublishUrl = 'https://other.example.invalid/service/local/'
 """
 
@@ -1498,5 +1503,19 @@ gradlePlugin {
         ] as Set
         tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile()
                 .listFiles().any { it.name ==~ /gradle-plugin-project-0\.0\.1-[0-9.]+-[0-9]+\.jar/ }
+    }
+
+    def "a Nexus URL set on a parent project does not fail a build publishing with Maven"() {
+        given: 'a snapshot with the default publish type, which publishes with Maven'
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        new File(runner.projectDir, 'build.gradle') << """
+ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", runner)
+
+        then:
+        assertTaskSuccess("assemble", result)
     }
 }

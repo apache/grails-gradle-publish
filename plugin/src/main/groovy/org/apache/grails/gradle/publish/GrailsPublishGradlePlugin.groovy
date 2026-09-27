@@ -220,13 +220,6 @@ Note: properties are read from the root project's gradle.properties, the one in 
         if (project.extensions.findByName('grailsPublish') == null) {
             project.extensions.create('grailsPublish', GrailsPublishExtension)
         }
-        final String nexusPublishUrl = findPropertyWithSilentDefault(project, 'nexusPublishUrl', 'NEXUS_PUBLISH_URL') ?: System.getenv('NEXUS_PUBLISH_URL') ?: ''
-        final String nexusPublishSnapshotUrl = findPropertyWithSilentDefault(project, 'nexusPublishSnapshotUrl', 'NEXUS_PUBLISH_SNAPSHOT_URL') ?: System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL') ?: ''
-        final String nexusPublishUsername = findProjectProperty(project, 'nexusPublishUsername') ?: System.getenv('NEXUS_PUBLISH_USERNAME') ?: ''
-        final String nexusPublishPassword = findProjectProperty(project, 'nexusPublishPassword') ?: System.getenv('NEXUS_PUBLISH_PASSWORD') ?: ''
-        final String nexusPublishStagingProfileId = findProjectProperty(project, 'nexusPublishStagingProfileId') ?: System.getenv('NEXUS_PUBLISH_STAGING_PROFILE_ID') ?: ''
-        final String nexusPublishDescription = findProjectProperty(project, 'nexusPublishDescription') ?: System.getenv('NEXUS_PUBLISH_DESCRIPTION') ?: ''
-
         final ExtraPropertiesExtension extraPropertiesExtension = project.extensions.findByType(ExtraPropertiesExtension)
 
         final Object snapshotPublishTypeProperty = findPropertyWithSilentDefault(project, SNAPSHOT_PUBLISH_TYPE_PROPERTY)
@@ -315,6 +308,14 @@ Note: properties are read from the root project's gradle.properties, the one in 
 
 
         if (useNexusPublish) {
+            // only read by builds publishing through Nexus, so a Nexus URL left on a parent project doesn't fail other builds
+            final String nexusPublishUrl = findPropertyWithSilentDefault(project, 'nexusPublishUrl', 'NEXUS_PUBLISH_URL') ?: System.getenv('NEXUS_PUBLISH_URL') ?: ''
+            final String nexusPublishSnapshotUrl = findPropertyWithSilentDefault(project, 'nexusPublishSnapshotUrl', 'NEXUS_PUBLISH_SNAPSHOT_URL') ?: System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL') ?: ''
+            final String nexusPublishUsername = findProjectProperty(project, 'nexusPublishUsername') ?: System.getenv('NEXUS_PUBLISH_USERNAME') ?: ''
+            final String nexusPublishPassword = findProjectProperty(project, 'nexusPublishPassword') ?: System.getenv('NEXUS_PUBLISH_PASSWORD') ?: ''
+            final String nexusPublishStagingProfileId = findProjectProperty(project, 'nexusPublishStagingProfileId') ?: System.getenv('NEXUS_PUBLISH_STAGING_PROFILE_ID') ?: ''
+            final String nexusPublishDescription = findProjectProperty(project, 'nexusPublishDescription') ?: System.getenv('NEXUS_PUBLISH_DESCRIPTION') ?: ''
+
             // The nexus plugin is special since it must always be applied to the root project.
             // Handle when multiple subprojects exist and grailsPublish is defined in each one instead of at the root.
             final PluginManager rootProjectPluginManager = project.rootProject.pluginManager
