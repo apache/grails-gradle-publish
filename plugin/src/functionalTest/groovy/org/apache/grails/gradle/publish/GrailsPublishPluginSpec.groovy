@@ -1473,4 +1473,30 @@ ext.nexusPublishUrl = 'https://other.example.invalid/service/local/'
         then:
         assertTaskSuccess("assemble", result)
     }
+
+    def "a gradle plugin project without automated publishing keeps the maven publication"() {
+        given:
+        File tempDir = File.createTempDir("gradle-plugin-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+gradlePlugin {
+    automatedPublishing = false
+}
+"""
+
+        when:
+        def result = executeTask("publish", runner)
+
+        then: 'there is no pluginMaven publication, so the maven publication keeps its name and gets the java component'
+        result.tasks*.path.findAll { it.startsWith(':publish') && it.endsWith('ToMavenRepository') }.toSet() == [
+                ':publishMavenPublicationToMavenRepository',
+        ] as Set
+        tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile()
+                .listFiles().any { it.name ==~ /gradle-plugin-project-0\.0\.1-[0-9.]+-[0-9]+\.jar/ }
+    }
 }

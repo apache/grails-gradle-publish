@@ -123,8 +123,9 @@ class GrailsPublishExtension {
     final Property<Boolean> addComponents
 
     /**
-     * The name of the publication. Defaults to 'pluginMaven' when the java-gradle-plugin is applied, so its publication
-     * is configured instead of publishing the same artifacts a second time, and to 'maven' otherwise.
+     * The name of the publication. Defaults to 'pluginMaven' when the java-gradle-plugin is applied with automated
+     * publishing, so its publication is configured instead of publishing the same artifacts a second time, and to
+     * 'maven' otherwise.
      */
     final Property<String> publicationName
 
@@ -198,7 +199,7 @@ class GrailsPublishExtension {
         pomCustomization = objects.property(Closure).convention(null as Closure)
         addComponents = objects.property(Boolean).convention(true)
         publicationName = objects.property(String).convention(project.provider {
-            isGradlePluginProject(project) ? 'pluginMaven' : 'maven'
+            GrailsPublishGradlePlugin.isComponentAddedByJavaGradlePlugin(project, 'pluginMaven') ? 'pluginMaven' : 'maven'
         })
         transitiveDependencies = objects.property(Boolean).convention(true)
         organization = objects.newInstance(Organization)
@@ -286,9 +287,5 @@ class GrailsPublishExtension {
             configurer.call(publication)
         } as Action<AdditionalPublication>
         additionalPublication(name, action)
-    }
-
-    private static boolean isGradlePluginProject(Project project) {
-        project.pluginManager.hasPlugin('java-gradle-plugin')
     }
 }
