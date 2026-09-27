@@ -81,6 +81,7 @@ import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.javadoc.Groovydoc
 import org.gradle.api.tasks.javadoc.Javadoc
+import org.gradle.plugin.devel.GradlePluginDevelopmentExtension
 import org.gradle.plugins.signing.Sign
 import org.gradle.plugins.signing.SigningExtension
 import org.gradle.plugins.signing.SigningPlugin
@@ -424,10 +425,11 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                                  'testFixturesCompileClasspath', 'testFixturesRuntimeClasspath'])
                     } as Action<MavenPublication>
 
-                    // reuse the publication if it already exists, such as the pluginMaven publication the
-                    // java-gradle-plugin creates when it is applied before this plugin
+                    // the java-gradle-plugin creates its pluginMaven publication itself when it is applied before this
+                    // plugin, so configure that one instead of failing on the duplicate name
                     String primaryPublicationName = gpe.publicationName.get()
-                    MavenPublication existingPublication = publications.findByName(primaryPublicationName) as MavenPublication
+                    MavenPublication existingPublication = isComponentAddedByJavaGradlePlugin(project, primaryPublicationName) ?
+                            publications.findByName(primaryPublicationName) as MavenPublication : null
                     if (existingPublication) {
                         configurePrimaryPublication.execute(existingPublication)
                     } else {
@@ -861,7 +863,14 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
         }
 
         def javaComponent = project.components.named('java').get()
-        if (gpe.additionalPublications) {
+        if (isComponentAddedByJavaGradlePlugin(project, publication.name)) {
+            if (gpe.additionalPublications) {
+                throw new InvalidUserDataException("Additional publications are not supported for project `${project.name}`, " +
+                        "since the java-gradle-plugin adds the java component to its `${publication.name}` publication, and " +
+                        'additional publications require this plugin to add a component that links to them.')
+            }
+            // the java-gradle-plugin adds the java component itself
+        } else if (gpe.additionalPublications) {
             if (!(javaComponent instanceof SoftwareComponentInternal)) {
                 throw new GradleException("Additional publications require the `java` component to implement SoftwareComponentInternal, but it is a ${javaComponent.class.name}. This Gradle version is not supported for additional publications.")
             }
@@ -885,6 +894,15 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
         if (gpe.publishTestSources.get()) {
             publication.artifact(project.tasks.named('testSourcesJar', Jar))
         }
+    }
+
+    /**
+     * Whether the java-gradle-plugin adds the java component to the publication, which it does for its pluginMaven
+     * publication unless its automated publishing is disabled.
+     */
+    protected static boolean isComponentAddedByJavaGradlePlugin(Project project, String publicationName) {
+        GradlePluginDevelopmentExtension gradlePlugin = project.extensions.findByType(GradlePluginDevelopmentExtension)
+        publicationName == 'pluginMaven' && gradlePlugin != null && gradlePlugin.automatedPublishing
     }
 
     private static SourceSetContainer findSourceSets(Project project) {

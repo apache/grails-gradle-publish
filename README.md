@@ -154,10 +154,14 @@ By default, a `release` or `snapshot` build is determined by the `project.versio
 
 ### Gradle Plugin Projects
 
-The `java-gradle-plugin` creates its own `pluginMaven` publication, plus a marker publication for each plugin. When it is
-applied, this plugin configures the `pluginMaven` publication instead of creating a second publication with the same
-artifacts: `publicationName` defaults to `pluginMaven` and `addComponents` to `false`. The plugins can be applied in
-either order.
+The `java-gradle-plugin` creates its own `pluginMaven` publication from the `java` component, plus a marker publication
+for each plugin. When it is applied, `publicationName` defaults to `pluginMaven`, so this plugin configures that
+publication instead of creating a second one with the same artifacts, and leaves adding the `java` component to the
+`java-gradle-plugin`. Everything else, such as the test sources jar and the pom, is still added. The plugins can be
+applied in either order.
+
+Additional publications are not supported in this setup, since they need this plugin to add a component that links to
+them.
 
 ### Additional Publications
 

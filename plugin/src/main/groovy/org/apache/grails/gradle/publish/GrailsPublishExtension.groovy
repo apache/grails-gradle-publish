@@ -118,7 +118,7 @@ class GrailsPublishExtension {
 
     /**
      * If another process will add the components set this to false so only the publication is created.
-     * Defaults to false when the java-gradle-plugin is applied, since it adds the components to its pluginMaven publication.
+     * When the java-gradle-plugin adds the java component to its pluginMaven publication, only that component is left out.
      */
     final Property<Boolean> addComponents
 
@@ -196,9 +196,7 @@ class GrailsPublishExtension {
         publishTestSources = objects.property(Boolean).convention(false)
         testRepositoryPath = objects.directoryProperty().convention(null as Directory)
         pomCustomization = objects.property(Closure).convention(null as Closure)
-        addComponents = objects.property(Boolean).convention(project.provider {
-            !isGradlePluginProject(project)
-        })
+        addComponents = objects.property(Boolean).convention(true)
         publicationName = objects.property(String).convention(project.provider {
             isGradlePluginProject(project) ? 'pluginMaven' : 'maven'
         })

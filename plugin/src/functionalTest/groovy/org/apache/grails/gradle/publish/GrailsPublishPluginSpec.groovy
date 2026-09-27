@@ -1351,4 +1351,72 @@ tasks.named('javadoc', Javadoc) {
         where:
         javaGradlePluginFirst << [true, false]
     }
+
+    def "a gradle plugin project publishes its test sources through the pluginMaven publication"() {
+        given:
+        File tempDir = File.createTempDir("gradle-plugin-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        and:
+        File testSource = new File(runner.projectDir, 'src/test/groovy/org/grails/example/MyProjectTest.groovy')
+        testSource.parentFile.mkdirs()
+        testSource.text = 'package org.grails.example\n\nclass MyProjectTest {}\n'
+        new File(runner.projectDir, 'build.gradle') << """
+grailsPublish {
+    publishTestSources = true
+}
+"""
+
+        when:
+        executeTask("publish", runner)
+
+        then:
+        File[] published = tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile().listFiles()
+        File testsJar = published.find { it.name.endsWith("-tests.jar") }
+        testsJar
+        findJarFileEntry("org/grails/example/MyProjectTest.class", testsJar)
+    }
+
+    def "a gradle plugin project fails clearly when it declares an additional publication"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        new File(runner.projectDir, 'build.gradle') << """
+grailsPublish {
+    additionalPublication('cli') {
+    }
+}
+"""
+
+        when:
+        executeTask("assemble", runner)
+
+        then:
+        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
+        bf.buildResult.output.contains("Additional publications are not supported for project `gradle-plugin-project`, since the java-gradle-plugin adds the java component to its `pluginMaven` publication")
+    }
+
+    def "a publication created by the build with the same name is not reused"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'simple-project')
+        new File(runner.projectDir, 'build.gradle') << """
+publishing {
+    publications {
+        maven(MavenPublication) {
+        }
+    }
+}
+"""
+
+        when:
+        executeTask("assemble", runner)
+
+        then:
+        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
+        bf.buildResult.output.contains("Cannot add a Publication with name 'maven' as a Publication with that name already exists.")
+    }
 }
