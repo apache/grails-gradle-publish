@@ -1320,6 +1320,7 @@ tasks.named('javadoc', Javadoc) {
         UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
         bf.buildResult.output.contains("The property `snapshotPublishType` is set on root project 'properties-from-parent-project' but not on project ':subproject'.")
         bf.buildResult.output.contains("Set `snapshotPublishType` in the root project's gradle.properties, with -PsnapshotPublishType=..., or on project ':subproject' itself")
+        bf.buildResult.output.contains("in its build script before applying the plugin.")
     }
 
     def "a gradle plugin project publishes through the pluginMaven publication - java-gradle-plugin applied first: #javaGradlePluginFirst"() {
@@ -1458,6 +1459,7 @@ ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
         then: 'instead of the Nexus plugin falling back to oss.sonatype.org'
         UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
         bf.buildResult.output.contains("The property `nexusPublishUrl` is set on root project 'properties-from-parent-project' but not on project ':subproject'.")
+        bf.buildResult.output.contains("in its build script before applying the plugin, or set the NEXUS_PUBLISH_URL environment variable.")
     }
 
     def "a Nexus URL set on a parent project is ignored when the environment variable is set"() {

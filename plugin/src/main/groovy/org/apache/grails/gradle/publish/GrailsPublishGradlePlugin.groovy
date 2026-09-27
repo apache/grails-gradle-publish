@@ -204,10 +204,11 @@ Note: properties are read from the root project's gradle.properties, the one in 
         if (value == null && !environmentFallback && !buildFeatures.isolatedProjects.active.get()) {
             for (Project parent = project.parent; parent != null; parent = parent.parent) {
                 if (parent.extensions.extraProperties.has(name)) {
+                    String orEnvironmentVariable = environmentVariable ? ", or set the ${environmentVariable} environment variable" : ''
                     throw new InvalidUserDataException("The property `${name}` is set on ${parent} but not on ${project}. " +
                             'The Grails Publish plugin does not read properties from parent projects. ' +
                             "Set `${name}` in the root project's gradle.properties, with -P${name}=..., or on ${project} " +
-                            'itself, in its gradle.properties or in its build script before applying the plugin.')
+                            "itself, in its gradle.properties or in its build script before applying the plugin${orEnvironmentVariable}.")
                 }
             }
         }
