@@ -709,7 +709,6 @@ Note: properties are read from the root project's gradle.properties, the one in 
                 jar.archiveBaseName.set(additional.artifactId)
                 jar.archiveClassifier.set('sources')
                 jar.from(sourceSet.allSource)
-                jar.inputs.files(sourceSet.allSource)
             }
         }
         publication.artifact(sourcesJarTask) { MavenArtifact artifact ->
@@ -999,7 +998,6 @@ Note: properties are read from the root project's gradle.properties, the one in 
                 Provider<File> groovyDocDir = project.provider { groovyDocTask.destinationDir }
                 ConfigurableFileCollection groovyDocFiles = project.files(groovyDocDir)
                 jar.from(groovyDocFiles)
-                jar.inputs.files(groovyDocFiles)
 
                 // The `javadoc` task's output is wired into this jar by `withJavadocJar()` - either the
                 // call above, or one the consumer made in their own build script before applying this
