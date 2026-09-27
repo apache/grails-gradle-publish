@@ -131,10 +131,15 @@ the release publish behavior, set the property `releasePublishType` to `MAVEN_PU
 
 The credentials and connection url must be specified as a project property or an environment variable.
 
-Project properties are read from Gradle properties (`gradle.properties`, `-P` or `ORG_GRADLE_PROJECT_` environment
-variables) or from the project applying the plugin, where they must be set before the plugin is applied. Properties set
-via `ext` on a parent project are not read. If `snapshotPublishType` or `releasePublishType` is only set on a parent
-project, the build fails rather than silently falling back to the default publish type.
+Project properties are read from:
+
+- the root project's `gradle.properties`, the one in the Gradle user home, `-P` or `ORG_GRADLE_PROJECT_` environment
+  variables
+- the project applying the plugin: its own `gradle.properties`, or `ext` in its build script before the plugin is applied
+
+Properties set on a parent project, via `ext` or in the `gradle.properties` of a parent project's directory, are not
+read. If `snapshotPublishType` or `releasePublishType` is only set on a parent project, the build fails rather than
+silently falling back to the default publish type.
 
 `MAVEN_PUBLISH` Environment Variables are:
 

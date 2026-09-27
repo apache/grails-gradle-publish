@@ -171,7 +171,7 @@ The credentials and connection url must be specified as a project property or an
 
 When using `NEXUS_PUBLISH`, either the property `signing.secretKeyRingFile` must be set to the path of the GPG keyring file or local gpg must be configured to sign artifacts.
 
-Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_PROJECT_ environment variables) or be set on the project applying this plugin, before it is applied. Properties set on parent projects are not read.
+Note: properties are read from the root project's gradle.properties, the one in the Gradle user home, -P or ORG_GRADLE_PROJECT_ environment variables, or from the project applying this plugin: its own gradle.properties, or its build script before the plugin is applied. Properties set on parent projects, including in the gradle.properties of a parent project's directory, are not read.
 """
     }
 
@@ -203,8 +203,8 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                 if (parent.extensions.extraProperties.has(name)) {
                     throw new InvalidUserDataException("The property `${name}` is set on ${parent} but not on ${project}. " +
                             'The Grails Publish plugin does not read properties from parent projects. ' +
-                            "Set `${name}` in gradle.properties, with -P${name}=..., or in the build script of " +
-                            "${project} before applying the plugin.")
+                            "Set `${name}` in the root project's gradle.properties, with -P${name}=..., or on ${project} " +
+                            'itself, in its gradle.properties or in its build script before applying the plugin.')
                 }
             }
         }

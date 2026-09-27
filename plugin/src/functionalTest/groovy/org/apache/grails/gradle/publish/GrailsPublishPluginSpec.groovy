@@ -1319,6 +1319,7 @@ tasks.named('javadoc', Javadoc) {
         then: 'instead of silently publishing with the default publish type'
         UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
         bf.buildResult.output.contains("The property `snapshotPublishType` is set on root project 'properties-from-parent-project' but not on project ':subproject'.")
+        bf.buildResult.output.contains("Set `snapshotPublishType` in the root project's gradle.properties, with -PsnapshotPublishType=..., or on project ':subproject' itself")
     }
 
     def "a gradle plugin project publishes through the pluginMaven publication - java-gradle-plugin applied first: #javaGradlePluginFirst"() {
