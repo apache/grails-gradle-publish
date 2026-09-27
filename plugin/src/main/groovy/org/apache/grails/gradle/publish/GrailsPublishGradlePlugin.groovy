@@ -444,7 +444,11 @@ Note: properties must be Gradle properties (gradle.properties, -P or ORG_GRADLE_
                                 if (component == null) {
                                     throw new InvalidUserDataException("Additional publication `${additional.name}` of project `${project.name}` requires a software component named `${componentName}`, but none exists. Create the component (e.g. via SoftwareComponentFactory.adhoc) before the project is evaluated, or set `componentName` to an existing component.")
                                 }
-                                requireNoDirectoryArtifacts(project, additional.name, component)
+                                // check once configuration is complete, since reading the component's variants locks
+                                // it against changes made later, such as in another afterEvaluate block
+                                project.gradle.taskGraph.whenReady {
+                                    requireNoDirectoryArtifacts(project, additional.name, component)
+                                }
                                 publication.from(component)
                                 attachDocsJars(project, publication, additional)
 

@@ -20,6 +20,7 @@
 package org.apache.grails.gradle.publish
 
 import org.gradle.testkit.runner.GradleRunner
+import org.gradle.testkit.runner.UnexpectedBuildFailure
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -136,5 +137,49 @@ class AdditionalPublicationSpec extends GradleSpecification {
         File cliJavadocJar = cliArtifacts.find { it.name.endsWith("-javadoc.jar") }
         cliJavadocJar
         findJarFileEntry("org/grails/example/cli/MyCommand.html", cliJavadocJar)
+    }
+
+    def "additional publication fails when its component contains class or resource directories"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'additional-publication')
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+
+        and: 'the component keeps the directory variants'
+        File buildFile = new File(runner.projectDir, 'build.gradle')
+        buildFile.text = buildFile.text.replace('if (isDirectoryVariant(it)) {', 'if (false) {')
+
+        when:
+        executeTask("assemble", runner)
+
+        then:
+        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
+        bf.buildResult.output.contains("Publication `cli` of root project 'additional-publication' contains the directory `build/classes/")
+        bf.buildResult.output.contains('skip the variants whose artifact type is one of java-classes-directory, java-resources-directory')
+    }
+
+    def "additional publication components can still be changed after the plugin configured the publications"() {
+        given:
+        File tempDir = File.createTempDir("additional-publication")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'additional-publication')
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        and: 'the build changes the component in an afterEvaluate block that runs after the plugin'
+        File buildFile = new File(runner.projectDir, 'build.gradle')
+        buildFile.text += """
+afterEvaluate {
+    components.cli.withVariantsFromConfiguration(configurations.cliRuntimeElements) {}
+}
+"""
+
+        when:
+        def result = executeTask("publish", runner)
+
+        then:
+        assertTaskSuccess("publish", result)
     }
 }
