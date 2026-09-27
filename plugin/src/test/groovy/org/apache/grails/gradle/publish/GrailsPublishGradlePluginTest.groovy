@@ -23,6 +23,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.component.SoftwareComponentFactory
 import org.gradle.api.internal.project.ProjectInternal
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.testfixtures.ProjectBuilder
@@ -44,6 +45,19 @@ class GrailsPublishGradlePluginTest extends Specification {
         GrailsPublishGradlePlugin.findProjectProperty(child, 'githubSlug') == 'from/child'
         GrailsPublishGradlePlugin.findProjectProperty(child, 'onlyOnRoot') == null
         GrailsPublishGradlePlugin.findProjectProperty(child, 'notSetAnywhere') == null
+    }
+
+    def 'a plugin extending this one can declare its own injected constructor'() {
+        given: 'a subclass shaped like the grails-core profile publish plugin'
+        def project = ProjectBuilder.builder().build()
+        project.version = '1.0.0-SNAPSHOT'
+        project.plugins.apply('groovy')
+
+        when:
+        project.plugins.apply(ExtendingPublishPlugin)
+
+        then: 'the injected build features are available to the base class'
+        project.extensions.findByType(GrailsPublishExtension) != null
     }
 
     def 'requires java or java platform plugin'() {
@@ -491,6 +505,16 @@ class GrailsPublishGradlePluginTest extends Specification {
             current = current.cause
         }
         false
+    }
+
+    static class ExtendingPublishPlugin extends GrailsPublishGradlePlugin {
+
+        final ObjectFactory objectFactory
+
+        @Inject
+        ExtendingPublishPlugin(ObjectFactory objectFactory) {
+            this.objectFactory = objectFactory
+        }
     }
 
     static abstract class ComponentFactoryHolder {

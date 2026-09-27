@@ -115,11 +115,13 @@ class GrailsPublishGradlePlugin implements Plugin<Project> {
             ArtifactTypeDefinition.DIRECTORY_TYPE,
     ] as Set<String>
 
-    private final BuildFeatures buildFeatures
-
+    /**
+     * Injected through a getter rather than the constructor, so plugins extending this one keep working with their own
+     * constructors.
+     */
     @Inject
-    GrailsPublishGradlePlugin(BuildFeatures buildFeatures) {
-        this.buildFeatures = buildFeatures
+    protected BuildFeatures getBuildFeatures() {
+        throw new UnsupportedOperationException('Injected by Gradle')
     }
 
     static String createErrorMessage(String missingSetting) {
