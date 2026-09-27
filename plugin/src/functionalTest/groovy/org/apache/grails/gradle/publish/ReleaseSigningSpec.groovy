@@ -171,11 +171,18 @@ class ReleaseSigningSpec extends GradleSpecification {
 
     private static String run(List<String> command) {
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start()
-        String output = process.inputStream.text
-        if (!process.waitFor(2, TimeUnit.MINUTES) || process.exitValue() != 0) {
+        // read the output on a separate thread, since reading it here would only return once gpg exits
+        StringBuilder output = new StringBuilder()
+        Thread reader = process.consumeProcessOutputStream(output)
+        if (!process.waitFor(2, TimeUnit.MINUTES)) {
+            process.destroyForcibly()
+            throw new IllegalStateException("${command.join(' ')} timed out:\n${output}")
+        }
+        reader.join()
+        if (process.exitValue() != 0) {
             throw new IllegalStateException("${command.join(' ')} failed:\n${output}")
         }
-        output
+        output.toString()
     }
 
     static boolean gpgAvailable() {
