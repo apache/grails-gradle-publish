@@ -192,13 +192,16 @@ Note: properties are read from the root project's gradle.properties, the one in 
     }
 
     /**
-     * Finds a publish type property. These fall back to a default when unset, so a value that is only set on a parent
-     * project, which is no longer read, would silently change where artifacts are published. Fail the build instead.
+     * Finds a property that silently falls back to a default when unset: the publish types to the default publish
+     * type, and the Nexus URLs to the Nexus plugin's oss.sonatype.org URLs. A value that is only set on a parent
+     * project, which is no longer read, would change where artifacts are published without notice, so fail the build
+     * instead, unless the environment variable read as a fallback is set.
      */
-    private Object findPublishTypeProperty(Project project, String name) {
+    private Object findPropertyWithSilentDefault(Project project, String name, String environmentVariable = null) {
         Object value = findProjectProperty(project, name)
+        boolean environmentFallback = environmentVariable != null && System.getenv(environmentVariable)
         // with Isolated Projects, parent projects cannot be inspected, and such builds never relied on reading them
-        if (value == null && !buildFeatures.isolatedProjects.active.get()) {
+        if (value == null && !environmentFallback && !buildFeatures.isolatedProjects.active.get()) {
             for (Project parent = project.parent; parent != null; parent = parent.parent) {
                 if (parent.extensions.extraProperties.has(name)) {
                     throw new InvalidUserDataException("The property `${name}` is set on ${parent} but not on ${project}. " +
@@ -217,8 +220,8 @@ Note: properties are read from the root project's gradle.properties, the one in 
         if (project.extensions.findByName('grailsPublish') == null) {
             project.extensions.create('grailsPublish', GrailsPublishExtension)
         }
-        final String nexusPublishUrl = findProjectProperty(project, 'nexusPublishUrl') ?: System.getenv('NEXUS_PUBLISH_URL') ?: ''
-        final String nexusPublishSnapshotUrl = findProjectProperty(project, 'nexusPublishSnapshotUrl') ?: System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL') ?: ''
+        final String nexusPublishUrl = findPropertyWithSilentDefault(project, 'nexusPublishUrl', 'NEXUS_PUBLISH_URL') ?: System.getenv('NEXUS_PUBLISH_URL') ?: ''
+        final String nexusPublishSnapshotUrl = findPropertyWithSilentDefault(project, 'nexusPublishSnapshotUrl', 'NEXUS_PUBLISH_SNAPSHOT_URL') ?: System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL') ?: ''
         final String nexusPublishUsername = findProjectProperty(project, 'nexusPublishUsername') ?: System.getenv('NEXUS_PUBLISH_USERNAME') ?: ''
         final String nexusPublishPassword = findProjectProperty(project, 'nexusPublishPassword') ?: System.getenv('NEXUS_PUBLISH_PASSWORD') ?: ''
         final String nexusPublishStagingProfileId = findProjectProperty(project, 'nexusPublishStagingProfileId') ?: System.getenv('NEXUS_PUBLISH_STAGING_PROFILE_ID') ?: ''
@@ -226,8 +229,8 @@ Note: properties are read from the root project's gradle.properties, the one in 
 
         final ExtraPropertiesExtension extraPropertiesExtension = project.extensions.findByType(ExtraPropertiesExtension)
 
-        final Object snapshotPublishTypeProperty = findPublishTypeProperty(project, SNAPSHOT_PUBLISH_TYPE_PROPERTY)
-        final Object releasePublishTypeProperty = findPublishTypeProperty(project, RELEASE_PUBLISH_TYPE_PROPERTY)
+        final Object snapshotPublishTypeProperty = findPropertyWithSilentDefault(project, SNAPSHOT_PUBLISH_TYPE_PROPERTY)
+        final Object releasePublishTypeProperty = findPropertyWithSilentDefault(project, RELEASE_PUBLISH_TYPE_PROPERTY)
         PublishType snapshotPublishType = snapshotPublishTypeProperty != null ? PublishType.valueOf(snapshotPublishTypeProperty as String) : PublishType.MAVEN_PUBLISH
         PublishType releasePublishType = releasePublishTypeProperty != null ? PublishType.valueOf(releasePublishTypeProperty as String) : PublishType.NEXUS_PUBLISH
 

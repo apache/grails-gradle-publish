@@ -1443,4 +1443,34 @@ publishing {
         !result.output.contains(":compileTestGroovy")
         !result.output.contains(":testClasses")
     }
+
+    def "a Nexus URL set only on a parent project fails the build"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        new File(runner.projectDir, 'build.gradle') << """
+ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
+"""
+
+        when:
+        executeTask(":subproject:assemble", runner)
+
+        then: 'instead of the Nexus plugin falling back to oss.sonatype.org'
+        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
+        bf.buildResult.output.contains("The property `nexusPublishUrl` is set on root project 'properties-from-parent-project' but not on project ':subproject'.")
+    }
+
+    def "a Nexus URL set on a parent project is ignored when the environment variable is set"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = addEnvironmentVariable("NEXUS_PUBLISH_URL", "https://nexus.example.invalid/service/local/", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+ext.nexusPublishUrl = 'https://other.example.invalid/service/local/'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", runner)
+
+        then:
+        assertTaskSuccess("assemble", result)
+    }
 }
