@@ -1420,4 +1420,27 @@ publishing {
         UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
         bf.buildResult.output.contains("Cannot add a Publication with name 'maven' as a Publication with that name already exists.")
     }
+
+    def "publishing the grails-plugin.xml does not compile the tests"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'grails-plugin-project')
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        and: 'a test class, and the grails-plugin.xml from an earlier build'
+        File testSource = new File(runner.projectDir, 'src/test/groovy/org/grails/example/MyProjectTest.groovy')
+        testSource.parentFile.mkdirs()
+        testSource.text = 'package org.grails.example\n\nclass MyProjectTest {}\n'
+        executeTask("classes", runner)
+
+        when:
+        def result = executeTask("publishToMavenLocal", ["--dry-run"], runner)
+
+        then: 'the extra artifact is published'
+        result.output.contains(":grailsPublishExtraArtifact SKIPPED")
+
+        and: 'the tests are not compiled, as publishTestSources is off'
+        !result.output.contains(":compileTestGroovy")
+        !result.output.contains(":testClasses")
+    }
 }

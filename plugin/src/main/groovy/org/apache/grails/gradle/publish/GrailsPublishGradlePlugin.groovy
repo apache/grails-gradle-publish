@@ -941,9 +941,9 @@ Note: properties are read from the root project's gradle.properties, the one in 
         TaskProvider<Copy> copyTask = project.tasks.register('grailsPublishExtraArtifact', Copy) { Copy copy ->
             copy.from(source)
             copy.into(project.layout.buildDirectory.dir('grails-publish/extra-artifact'))
-            // the file is written by the task producing the classes directory it lives in, and the jar tasks package
-            // those directories, so depending on them builds it
-            copy.dependsOn(project.tasks.withType(Jar))
+            // the file is written while building the main classes: grails-plugin.xml by compileGroovy, and
+            // grails-core's profile.yml by compileProfile, which its profile plugin adds to `classes`
+            copy.dependsOn(project.tasks.named('classes'))
         }
         Provider<File> copied = copyTask.map { Copy copy -> new File(copy.destinationDir, source.name) }
         publication.artifact(copied) { MavenArtifact artifact ->
