@@ -202,7 +202,7 @@ implements Plugin&lt;Project&gt;</pre>
                         
                         <tr class="altColor">
                             <td class="colFirst">
-                                <code><strong><a href="#GrailsPublishGradlePlugin(org.gradle.api.configuration.BuildFeatures)">GrailsPublishGradlePlugin</a></strong>(<a href='../../../../../org.gradle.api.configuration.BuildFeatures.html'>BuildFeatures</a> buildFeatures)</code><br></td>
+                                <code><strong><a href="#GrailsPublishGradlePlugin()">GrailsPublishGradlePlugin</a></strong>()</code><br></td>
                         </tr>
                         
                     </table>
@@ -285,14 +285,28 @@ implements Plugin&lt;Project&gt;</pre>
                         
                         <tr class="rowColor">
                             <td class="colFirst"><code></code></td>
-                            <td class="colLast"><code>protected&nbsp;java.lang.String</code></td>
-                            <td class="colLast"><code><strong><a href="#getDefaultClassifier()">getDefaultClassifier</a></strong>()</code><br></td>
+                            <td class="colLast"><code>protected&nbsp;<a href='../../../../../org.gradle.api.configuration.BuildFeatures.html'>BuildFeatures</a></code></td>
+                            <td class="colLast"><code><strong><a href="#getBuildFeatures()">getBuildFeatures</a></strong>()</code><br>Injected through a getter rather than the constructor, so plugins extending this one keep working with their own
+ constructors.</td>
                         </tr>
                         
                         <tr class="altColor">
                             <td class="colFirst"><code></code></td>
+                            <td class="colLast"><code>protected&nbsp;java.lang.String</code></td>
+                            <td class="colLast"><code><strong><a href="#getDefaultClassifier()">getDefaultClassifier</a></strong>()</code><br></td>
+                        </tr>
+                        
+                        <tr class="rowColor">
+                            <td class="colFirst"><code></code></td>
                             <td class="colLast"><code>protected&nbsp;java.util.Map&lt;java.lang.String, java.lang.String&gt;</code></td>
                             <td class="colLast"><code><strong><a href="#getDefaultExtraArtifact(org.gradle.api.Project)">getDefaultExtraArtifact</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project)</code><br></td>
+                        </tr>
+                        
+                        <tr class="altColor">
+                            <td class="colFirst"><code></code></td>
+                            <td class="colLast"><code>protected&nbsp;static&nbsp;boolean</code></td>
+                            <td class="colLast"><code><strong><a href="#isComponentAddedByJavaGradlePlugin(org.gradle.api.Project, java.lang.String)">isComponentAddedByJavaGradlePlugin</a></strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String publicationName)</code><br>Whether the java-gradle-plugin adds the java component to the publication, which it does for its pluginMaven
+ publication unless its automated publishing is disabled.</td>
                         </tr>
                         
                         <tr class="rowColor">
@@ -425,10 +439,10 @@ implements Plugin&lt;Project&gt;</pre>
                 </a>
                     <h3>Constructor Detail</h3>
                     
-                        <a name="GrailsPublishGradlePlugin(org.gradle.api.configuration.BuildFeatures)"><!-- --></a>
+                        <a name="GrailsPublishGradlePlugin()"><!-- --></a>
                         <ul class="blockListLast">
                             <li class="blockList">
-                                <h4>@javax.inject.Inject<br><strong>GrailsPublishGradlePlugin</strong>(<a href='../../../../../org.gradle.api.configuration.BuildFeatures.html'>BuildFeatures</a> buildFeatures)</h4>
+                                <h4><strong>GrailsPublishGradlePlugin</strong>()</h4>
                                 <p></p>
                             </li>
                         </ul>
@@ -525,6 +539,15 @@ implements Plugin&lt;Project&gt;</pre>
                             </li>
                         </ul>
                     
+                        <a name="getBuildFeatures()"><!-- --></a>
+                        <ul class="blockListLast">
+                            <li class="blockList">
+                                <h4>@javax.inject.Inject<br>protected&nbsp;<a href='../../../../../org.gradle.api.configuration.BuildFeatures.html'>BuildFeatures</a> <strong>getBuildFeatures</strong>()</h4>
+                                <p> Injected through a getter rather than the constructor, so plugins extending this one keep working with their own
+ constructors.</p>
+                            </li>
+                        </ul>
+                    
                         <a name="getDefaultClassifier()"><!-- --></a>
                         <ul class="blockListLast">
                             <li class="blockList">
@@ -538,6 +561,15 @@ implements Plugin&lt;Project&gt;</pre>
                             <li class="blockList">
                                 <h4>protected&nbsp;java.util.Map&lt;java.lang.String, java.lang.String&gt; <strong>getDefaultExtraArtifact</strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project)</h4>
                                 <p></p>
+                            </li>
+                        </ul>
+                    
+                        <a name="isComponentAddedByJavaGradlePlugin(org.gradle.api.Project, java.lang.String)"><!-- --></a>
+                        <ul class="blockListLast">
+                            <li class="blockList">
+                                <h4>protected&nbsp;static&nbsp;boolean <strong>isComponentAddedByJavaGradlePlugin</strong>(<a href='../../../../../org.gradle.api.Project.html'>Project</a> project, java.lang.String publicationName)</h4>
+                                <p> Whether the java-gradle-plugin adds the java component to the publication, which it does for its pluginMaven
+ publication unless its automated publishing is disabled.</p>
                             </li>
                         </ul>
                     
