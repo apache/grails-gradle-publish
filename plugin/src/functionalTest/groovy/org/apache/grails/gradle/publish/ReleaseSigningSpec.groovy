@@ -85,12 +85,12 @@ class ReleaseSigningSpec extends GradleSpecification {
         then:
         List<File> published = publishedFiles(repository)
         published
-        published.findAll { !new File("${it.path}.asc").exists() } == []
+        published.findAll { !signatureVerifies(it) } == []
 
         and:
         List<File> publishedLocally = publishedFiles(mavenLocal)
         publishedLocally
-        publishedLocally.findAll { !new File("${it.path}.asc").exists() } == []
+        publishedLocally.findAll { !signatureVerifies(it) } == []
 
         where:
         fixture                  | environment                              | description
@@ -125,7 +125,7 @@ class ReleaseSigningSpec extends GradleSpecification {
         then: 'the grails-plugin.xml is published and signed'
         File publishedPluginXml = new File(repository, 'org/grails/example/grails-plugin-project/0.0.1/grails-plugin-project-0.0.1-plugin.xml')
         publishedPluginXml.text == '<plugin name="grails-plugin-project"/>'
-        new File("${publishedPluginXml.path}.asc").exists()
+        signatureVerifies(publishedPluginXml)
 
         and: 'its signature is not written into the classes directory, which other tasks read'
         !new File(runner.projectDir, 'build/classes/groovy/main/META-INF/grails-plugin.xml.asc').exists()
@@ -139,6 +139,22 @@ class ReleaseSigningSpec extends GradleSpecification {
             }
         }
         files
+    }
+
+    /**
+     * Whether the file's .asc signature exists and verifies against the throwaway key.
+     */
+    private boolean signatureVerifies(File file) {
+        File signature = new File("${file.path}.asc")
+        if (!signature.exists()) {
+            return false
+        }
+        try {
+            gpg('--batch', '--verify', signature.path, file.path)
+            true
+        } catch (IllegalStateException ignored) {
+            false
+        }
     }
 
     private String gpg(String... arguments) {
