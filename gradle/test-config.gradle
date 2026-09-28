@@ -52,6 +52,14 @@ testing {
                 implementation gradleTestKit()
                 implementation 'commons-io:commons-io:2.16.1'
                 implementation 'org.junit.platform:junit-platform-launcher'
+                // a local Nexus / Maven repository endpoint the example projects publish to
+                implementation "org.wiremock:wiremock-standalone:$wiremockVersion"
+                // generates the throwaway PGP keys used to sign, and verify, release artifacts, and the TLS
+                // certificate of the local Nexus endpoint
+                implementation "org.bouncycastle:bcpg-jdk18on:$bouncyCastleVersion"
+                implementation "org.bouncycastle:bcpkix-jdk18on:$bouncyCastleVersion"
+                // runs a release inside a clean container with its own gpg (Docker is required to run the tests)
+                implementation "org.testcontainers:testcontainers:$testcontainersVersion"
             }
 
             targets {
@@ -76,6 +84,13 @@ tasks.named('functionalTest').configure { Test it ->
     it.inputs.dir(project.layout.projectDirectory.dir('src/functionalTest/resources/publish-projects'))
             .withPathSensitivity(PathSensitivity.RELATIVE)
             .withPropertyName('example-gradle-projects')
+
+    // the example projects under examples/ are also run by the functional tests
+    def examplesDir = rootProject.layout.projectDirectory.dir('examples')
+    it.systemProperty('examplesDir', examplesDir.asFile.absolutePath)
+    it.inputs.files(examplesDir.asFileTree.matching { exclude '**/build/**', '**/.gradle/**' })
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+            .withPropertyName('example-projects')
 
     it.testLogging {
         exceptionFormat = 'full'

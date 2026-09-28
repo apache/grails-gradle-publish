@@ -1,0 +1,60 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+import org.gradle.api.publish.maven.MavenPomDeveloper
+
+// Shared publishing conventions, applied by every published subproject. The root project has already applied the
+// Grails Publish plugin, so this script only configures its extension; each value is a provider so a subproject can
+// still override it through its `ext` properties after applying this script.
+//
+// The extension is configured by name: classes from a `plugins { }` block are not visible to script plugins
+// (gradle/gradle#1262), so `GrailsPublishExtension` cannot be imported here. A binary convention plugin, as in the
+// grails-core build-logic, would use `extensions.configure(GrailsPublishExtension) { it... }` instead.
+// Note: the explicit `it` is required inside `extensions.configure`.
+extensions.configure('grailsPublish') {
+    it.artifactId.set(provider { findProperty('pomArtifactId') as String ?: project.name })
+    it.githubSlug.set('apache/grails-gradle-publish')
+    it.license.name = 'Apache-2.0'
+    it.title.set(provider { findProperty('pomTitle') as String ?: 'Acme Framework' })
+    it.desc.set(provider { findProperty('pomDescription') as String ?: 'The Acme framework, published the way grails-core is' })
+    it.organization {
+        it.name.set('Apache Software Foundation')
+        it.url.set('https://apache.org/')
+    }
+    it.developers.set([
+            developer('graemerocher', 'Graeme Rocher', 'Founder'),
+            developer('jdaugherty', 'James Daugherty', 'Developer'),
+    ])
+    it.pomCustomization.set(provider { findProperty('pomCustomization') as Closure })
+    it.publishTestSources.set(provider { Boolean.parseBoolean(findProperty('pomPublishTestSources')?.toString()) })
+    it.testRepositoryPath.set(rootProject.layout.buildDirectory.dir('local-maven'))
+    // the publication name and whether the java component is added default correctly for java-gradle-plugin
+    // projects; a project can still name its publication through `pomMavenPublicationName`
+    if (findProperty('pomMavenPublicationName')) {
+        it.publicationName.set(findProperty('pomMavenPublicationName') as String)
+    }
+}
+
+MavenPomDeveloper developer(String id, String name, String role) {
+    MavenPomDeveloper developer = objects.newInstance(MavenPomDeveloper)
+    developer.id.set(id)
+    developer.name.set(name)
+    developer.roles.add(role)
+    developer
+}

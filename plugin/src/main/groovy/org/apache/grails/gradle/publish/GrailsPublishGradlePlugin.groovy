@@ -18,6 +18,8 @@
  */
 package org.apache.grails.gradle.publish
 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import groovy.namespace.QName
 import groovy.transform.CompileStatic
 import io.github.gradlenexus.publishplugin.InitializeNexusStagingRepository
@@ -25,6 +27,7 @@ import io.github.gradlenexus.publishplugin.NexusPublishExtension
 import io.github.gradlenexus.publishplugin.NexusPublishPlugin
 import io.github.gradlenexus.publishplugin.NexusRepository
 import io.github.gradlenexus.publishplugin.NexusRepositoryContainer
+import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -39,6 +42,7 @@ import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.file.FileTreeElement
+import org.gradle.api.file.RegularFile
 import org.gradle.api.plugins.ExtensionContainer
 import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.api.plugins.JavaPlatformExtension
@@ -61,6 +65,7 @@ import org.gradle.api.publish.maven.MavenPomLicenseSpec
 import org.gradle.api.publish.maven.MavenPomScm
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
+import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.api.tasks.GroovySourceDirectorySet
 import org.gradle.api.tasks.SourceSet
@@ -68,6 +73,8 @@ import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.TaskContainer
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.compile.GroovyCompile
+import org.gradle.api.tasks.util.PatternFilterable
 import org.gradle.api.tasks.javadoc.Groovydoc
 import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.plugins.signing.Sign
@@ -91,6 +98,10 @@ class GrailsPublishGradlePlugin implements Plugin<Project> {
     public static String ENVIRONMENT_VARIABLE_BASED_RELEASE = 'GRAILS_PUBLISH_RELEASE'
     public static String SNAPSHOT_PUBLISH_TYPE_PROPERTY = 'snapshotPublishType'
     public static String RELEASE_PUBLISH_TYPE_PROPERTY = 'releasePublishType'
+    /** The Gradle plugins under which the Grails compiler generates META-INF/grails-plugin.xml */
+    public static List<String> GRAILS_PLUGIN_IDS = ['org.apache.grails.gradle.grails-plugin', 'org.grails.grails-plugin'].asImmutable()
+    public static String PLUGIN_DESCRIPTOR_PATH = 'META-INF/grails-plugin.xml'
+    public static String MAIN_GROOVY_COMPILE_TASK = 'compileGroovy'
 
     static String createErrorMessage(String missingSetting) {
         return """No '$missingSetting' was specified. Please provide a valid publishing configuration. Example:
@@ -147,6 +158,7 @@ Note: if project properties are used, the properties must be defined prior to ap
         if (project.extensions.findByName('grailsPublish') == null) {
             project.extensions.create('grailsPublish', GrailsPublishExtension)
         }
+        project.extensions.getByType(GrailsPublishExtension).pluginDescriptor.convention(defaultPluginDescriptor(project))
         final String nexusPublishUrl = project.findProperty('nexusPublishUrl') ?: System.getenv('NEXUS_PUBLISH_URL') ?: ''
         final String nexusPublishSnapshotUrl = project.findProperty('nexusPublishSnapshotUrl') ?: System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL') ?: ''
         final String nexusPublishUsername = project.findProperty('nexusPublishUsername') ?: System.getenv('NEXUS_PUBLISH_USERNAME') ?: ''
@@ -334,24 +346,31 @@ Note: if project properties are used, the properties must be defined prior to ap
                         }
                     }
 
-                    publications.create(gpe.publicationName.get(), MavenPublication) { MavenPublication publication ->
+                    List<String> primaryConfigurations = ['compileClasspath', 'runtimeClasspath',
+                                                          'testFixturesCompileClasspath', 'testFixturesRuntimeClasspath']
+                    // The java-gradle-plugin creates (or reuses) a `pluginMaven` publication in its own afterEvaluate;
+                    // whichever plugin runs first creates it, the other configures the same publication
+                    String publicationName = gpe.publicationName.get()
+                    MavenPublication existing = publications.findByName(publicationName) as MavenPublication
+                    Action<MavenPublication> configurePrimary = { MavenPublication publication ->
                         publication.artifactId = gpe.artifactId.get()
                         publication.groupId = gpe.groupId.get()
 
                         if (gpe.addComponents.get()) {
                             doAddArtefact(project, publication)
-                            def extraArtefact = getDefaultExtraArtifact(project)
-                            if (extraArtefact) {
-                                publication.artifact(extraArtefact)
-                            }
+                            addExtraArtifact(project, gpe, publication)
 
                             configureVersionMapping(project, publication, 'runtimeClasspath')
                         }
 
-                        configurePom(project, gpe, publication, gpe.title, gpe.desc, gpe.pomCustomization,
-                                ['compileClasspath', 'runtimeClasspath',
-                                 'testFixturesCompileClasspath', 'testFixturesRuntimeClasspath'])
+                        configurePom(project, gpe, publication, gpe.title, gpe.desc, gpe.pomCustomization, primaryConfigurations)
                     }
+                    if (existing != null) {
+                        configurePrimary.execute(existing)
+                    } else {
+                        publications.create(publicationName, MavenPublication, configurePrimary)
+                    }
+                    configureModuleMetadataVersions(project, gpe, publicationName, primaryConfigurations)
 
                     for (AdditionalPublication additional : gpe.additionalPublications) {
                         publications.create(additional.name, MavenPublication) { MavenPublication publication ->
@@ -373,6 +392,8 @@ Note: if project properties are used, the properties must be defined prior to ap
                             configurePom(project, gpe, publication, additional.title, additional.desc, additional.pomCustomization,
                                     [additional.compileClasspathName.get(), additional.runtimeClasspathName.get()])
                         }
+                        configureModuleMetadataVersions(project, gpe, additional.name,
+                                [additional.compileClasspathName.get(), additional.runtimeClasspathName.get()])
                     }
                 }
             }
@@ -667,6 +688,110 @@ Note: if project properties are used, the properties must be defined prior to ap
         jar.dirPermissions { permissions ->
             permissions.unix(0755)
         }
+    }
+
+    /**
+     * The descriptor the Grails compiler writes while compiling the main Groovy sources of a Grails plugin project.
+     * The compiler only writes it when it compiles a (non-abstract) plugin class, i.e. a class named
+     * {@code *GrailsPlugin}, so the default is present only when the Grails plugin Gradle plugin is applied and
+     * such a Groovy source exists; a project applying the plugin for other reasons (grails-gsp-spring-boot in
+     * grails-core, for instance) publishes no descriptor. The provider is derived from the compile task's output
+     * directory (not from a mapped task output, which Gradle refuses to query before the task ran) and carries the
+     * task as its producer, so publishing builds the descriptor first.
+     */
+    protected Provider<RegularFile> defaultPluginDescriptor(Project project) {
+        project.provider {
+            GRAILS_PLUGIN_IDS.any { String id -> project.pluginManager.hasPlugin(id) } &&
+                    project.tasks.names.contains(MAIN_GROOVY_COMPILE_TASK) &&
+                    hasGrailsPluginClass(project)
+        }.flatMap { Boolean grailsPlugin ->
+            grailsPlugin ?
+                    project.tasks.named(MAIN_GROOVY_COMPILE_TASK, GroovyCompile).flatMap { GroovyCompile compile ->
+                        compile.destinationDirectory.file(PLUGIN_DESCRIPTOR_PATH)
+                    } :
+                    project.provider { (RegularFile) null }
+        }
+    }
+
+    /** Whether the main Groovy sources declare a plugin descriptor class ({@code *GrailsPlugin.groovy}) */
+    private static boolean hasGrailsPluginClass(Project project) {
+        JavaPluginExtension java = project.extensions.findByType(JavaPluginExtension)
+        SourceSet main = java?.sourceSets?.findByName(SourceSet.MAIN_SOURCE_SET_NAME)
+        GroovySourceDirectorySet groovy = main?.extensions?.findByType(GroovySourceDirectorySet)
+        groovy != null && !groovy.matching { PatternFilterable pattern -> pattern.include('**/*GrailsPlugin.groovy') }.isEmpty()
+    }
+
+    /**
+     * Attaches the extra artifact of the primary publication: the configured plugin descriptor, built by whatever
+     * produces it, or (for builds that create the descriptor some other way) a descriptor that already exists.
+     */
+    protected void addExtraArtifact(Project project, GrailsPublishExtension gpe, MavenPublication publication) {
+        if (!project.extensions.findByType(JavaPlatformExtension) && gpe.pluginDescriptor.isPresent()) {
+            publication.artifact(gpe.pluginDescriptor) { MavenArtifact artifact ->
+                artifact.classifier = getDefaultClassifier()
+                artifact.extension = 'xml'
+            }
+            return
+        }
+
+        Map<String, String> extraArtefact = getDefaultExtraArtifact(project)
+        if (extraArtefact) {
+            publication.artifact(extraArtefact)
+        }
+    }
+
+    /**
+     * Gradle module metadata is generated from version mapping, which resolves every `java-api` variant from the
+     * main runtime classpath. Dependencies of other variants that are managed by a platform and absent from that
+     * classpath (test fixtures, for example) are therefore written without a version. Fill them in from the same
+     * resolved classpaths the pom is completed from.
+     */
+    protected void configureModuleMetadataVersions(Project project, GrailsPublishExtension gpe, String publicationName, List<String> configurationNames) {
+        project.tasks.withType(GenerateModuleMetadata).configureEach { GenerateModuleMetadata task ->
+            if (task.publication.orNull?.name != publicationName) {
+                return
+            }
+            task.doLast {
+                if (!gpe.transitiveDependencies.get()) {
+                    return
+                }
+                File moduleFile = task.outputFile.get().asFile
+                Map<String, String> resolvedVersions = resolvedVersions(project, configurationNames)
+                Map module = new JsonSlurper().parse(moduleFile, 'UTF-8') as Map
+                boolean changed = false
+                for (Map variant : (module.variants ?: []) as List<Map>) {
+                    for (Map dependency : (variant.dependencies ?: []) as List<Map>) {
+                        Map version = dependency.version as Map
+                        if (version?.requires || version?.strictly || version?.prefers) {
+                            continue
+                        }
+                        String resolved = resolvedVersions["${dependency.group}:${dependency.module}" as String]
+                        if (resolved == null) {
+                            throw new GradleException("No version found for dependency ${dependency.group}:${dependency.module} of variant ${variant.name} in the module metadata of publication ${publicationName}.")
+                        }
+                        dependency.version = [requires: resolved]
+                        changed = true
+                    }
+                }
+                if (changed) {
+                    moduleFile.setText(JsonOutput.prettyPrint(JsonOutput.toJson(module)), 'UTF-8')
+                }
+            }
+        }
+    }
+
+    /** The versions of the artifacts resolved by the named configurations, keyed by `group:name` */
+    protected static Map<String, String> resolvedVersions(Project project, List<String> configurationNames) {
+        Map<String, String> versions = [:]
+        for (String configurationName : configurationNames) {
+            def configuration = project.configurations.findByName(configurationName)
+            if (configuration != null) {
+                for (ResolvedArtifact artifact : configuration.resolvedConfiguration.resolvedArtifacts) {
+                    versions.putIfAbsent("${artifact.moduleVersion.id.group}:${artifact.moduleVersion.id.name}" as String, artifact.moduleVersion.id.version)
+                }
+            }
+        }
+        versions
     }
 
     protected void setDependencyVersions(Node pomNode, Project project, List<String> configurationNames) {

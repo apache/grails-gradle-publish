@@ -22,6 +22,7 @@ import groovy.transform.CompileStatic
 import org.gradle.api.Action
 import org.gradle.api.Project
 import org.gradle.api.file.Directory
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
@@ -32,6 +33,8 @@ import javax.inject.Inject
 
 @CompileStatic
 class GrailsPublishExtension {
+
+    static final String JAVA_GRADLE_PLUGIN_ID = 'java-gradle-plugin'
 
     /**
      * The organization that produces the project
@@ -116,14 +119,27 @@ class GrailsPublishExtension {
     final Property<Closure> pomCustomization
 
     /**
-     * If another process will add the components set this to false so only the publication is created
+     * If another process will add the components set this to false so only the publication is created.
+     * Defaults to false when the java-gradle-plugin is applied, since that plugin adds the java component itself.
      */
     final Property<Boolean> addComponents
 
     /**
-     * The name of the publication
+     * The name of the publication; defaults to `maven`, or to the java-gradle-plugin's `pluginMaven` publication
+     * when that plugin is applied
      */
     final Property<String> publicationName
+
+    /**
+     * The Grails plugin descriptor (META-INF/grails-plugin.xml) published as the extra `-plugin.xml` artifact.
+     * Defaults to the descriptor the Grails compiler writes into the main Groovy classes when the Grails plugin
+     * Gradle plugin is applied and a plugin class ({@code *GrailsPlugin.groovy}) exists, so the artifact is built
+     * together with the classes. A build producing the descriptor
+     * itself can set it from the producing task, e.g.
+     * {@code tasks.named('compileGroovy', GroovyCompile).flatMap { it.destinationDirectory.file('META-INF/grails-plugin.xml') }}.
+     * When unset, a descriptor that already exists in the compiled classes is still published.
+     */
+    final RegularFileProperty pluginDescriptor
 
     /**
      * If set, a local repository will be setup for the given path with the name 'TestCaseMavenRepo'. This can be useful
@@ -193,8 +209,13 @@ class GrailsPublishExtension {
         publishTestSources = objects.property(Boolean).convention(false)
         testRepositoryPath = objects.directoryProperty().convention(null as Directory)
         pomCustomization = objects.property(Closure).convention(null as Closure)
-        addComponents = objects.property(Boolean).convention(true)
-        publicationName = objects.property(String).convention('maven')
+        addComponents = objects.property(Boolean).convention(project.provider {
+            !project.pluginManager.hasPlugin(JAVA_GRADLE_PLUGIN_ID)
+        })
+        publicationName = objects.property(String).convention(project.provider {
+            project.pluginManager.hasPlugin(JAVA_GRADLE_PLUGIN_ID) ? 'pluginMaven' : 'maven'
+        })
+        pluginDescriptor = objects.fileProperty()
         transitiveDependencies = objects.property(Boolean).convention(true)
         organization = objects.newInstance(Organization)
     }

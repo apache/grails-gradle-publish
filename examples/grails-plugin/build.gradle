@@ -1,0 +1,70 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+plugins {
+    id 'java-library'
+    id 'groovy'
+    id 'org.apache.grails.gradle.grails-publish'
+}
+
+version = projectVersion
+group = 'org.grails.example'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.apache.groovy:groovy:$groovyVersion"
+}
+
+// The Grails compiler writes the plugin descriptor META-INF/grails-plugin.xml into the compiled classes of a
+// Grails plugin, and the Grails Publish plugin publishes it as an extra artifact with the `plugin` classifier
+// (<artifactId>-<version>-plugin.xml), which is what the Grails plugin portal reads. With the Grails plugin
+// Gradle plugin (org.apache.grails.gradle.grails-plugin) applied that happens automatically; this example does
+// not depend on Grails, so it writes an equivalent descriptor itself while compiling and points the Grails
+// Publish plugin at it (see `pluginDescriptor` below).
+def compileGroovy = tasks.named('compileGroovy', GroovyCompile)
+compileGroovy.configure {
+    doLast {
+        File descriptor = destinationDirectory.file('META-INF/grails-plugin.xml').get().asFile
+        descriptor.parentFile.mkdirs()
+        descriptor.text = """\
+<plugin name='exampleGrailsPlugin' version='${project.version}' grailsVersion='7.0.0 &gt; *'>
+  <author>James Daugherty</author>
+  <title>Example Grails Plugin</title>
+  <description>Demonstrates publishing a Grails plugin with the Grails Publish plugin</description>
+  <type>org.grails.example.plugin.ExampleGrailsPlugin</type>
+</plugin>
+"""
+    }
+}
+
+grailsPublish {
+    githubSlug = 'apache/grails-gradle-publish'
+    license {
+        name = 'Apache-2.0'
+    }
+    title = 'Example Grails Plugin'
+    desc = 'A Grails plugin published with the Grails Publish plugin'
+    developers = [jdaugherty: 'James Daugherty']
+
+    // Derived from the task producing the descriptor, so publishing builds it first (even from a clean checkout)
+    pluginDescriptor = compileGroovy.flatMap { it.destinationDirectory.file('META-INF/grails-plugin.xml') }
+}

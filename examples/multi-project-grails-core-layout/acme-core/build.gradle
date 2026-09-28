@@ -1,0 +1,48 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+plugins {
+    id 'java-library'
+    id 'groovy'
+    // the test fixtures are published as a `test-fixtures` variant (capability acme-core-test-fixtures)
+    id 'java-test-fixtures'
+}
+
+version = projectVersion
+group = 'org.grails.example'
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    pomTitle = 'Acme Core'
+    pomDescription = 'The core module of the Acme framework'
+}
+apply from: rootProject.layout.projectDirectory.file('gradle/publish-conventions.gradle')
+
+dependencies {
+    // dependency versions come from the build's own BOM
+    implementation platform(project(':acme-bom'))
+    implementation 'org.apache.groovy:groovy'
+
+    testFixturesApi platform(project(':acme-bom'))
+    testFixturesApi 'org.apache.commons:commons-lang3'
+    testFixturesImplementation 'org.apache.groovy:groovy'
+}

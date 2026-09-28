@@ -1,0 +1,74 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+// Every subproject is configured from this root build script; the subprojects have no build script of their own.
+plugins {
+    id 'org.apache.grails.gradle.grails-publish' apply false
+}
+
+// The Nexus publish plugin (used for releases) decides between staging and snapshot publishing from the
+// version of the root project, so the version has to be set here as well as in the subprojects
+version = projectVersion
+group = 'org.grails.example'
+
+subprojects {
+    apply plugin: 'java-library'
+    apply plugin: 'groovy'
+
+    version = projectVersion
+    group = 'org.grails.example'
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation "org.apache.groovy:groovy:$groovyVersion"
+    }
+
+    apply plugin: 'org.apache.grails.gradle.grails-publish'
+    grailsPublish {
+        githubSlug = 'apache/grails-gradle-publish'
+        license {
+            name = 'Apache-2.0'
+        }
+        title = "Multi Project - ${project.name}"
+        desc = "The ${project.name} module of a multi-project build published with the Grails Publish plugin"
+        developers = [jdaugherty: 'James Daugherty']
+
+        // Optional: also publish into a repository inside the build directory. This is useful for functional
+        // tests of a consuming build that cannot use an included build. The repository is named
+        // `TestCaseMavenRepo`, so each project gets a `publishAllPublicationsToTestCaseMavenRepoRepository` task.
+        testRepositoryPath = rootProject.layout.buildDirectory.dir('local-maven')
+    }
+}
+
+project(':web') {
+    dependencies {
+        // project dependencies are published with the version of the referenced project
+        api project(':core')
+    }
+}
+
+// Aggregates the per-project test repository publish tasks so the whole build can be published with one task
+tasks.register('publishAllPublicationsToTestCaseMavenRepoRepository') {
+    group = 'publishing'
+    description = 'Publishes every subproject to the TestCaseMavenRepo repository.'
+    dependsOn subprojects.collect { it.tasks.named('publishAllPublicationsToTestCaseMavenRepoRepository') }
+}
