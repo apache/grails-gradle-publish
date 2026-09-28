@@ -201,51 +201,57 @@ extends java.lang.Object</pre>
                         </tr>
                         
                         <tr class="rowColor">
+                            <td class="colFirst"><code><strong><a href='../../../../../org.gradle.api.file.RegularFileProperty.html'>RegularFileProperty</a></strong></code>&nbsp;</td>
+                            <td class="colLast"><code><a href="#pluginDescriptor">pluginDescriptor</a></code><br>The Grails plugin descriptor (META-INF/grails-plugin.xml) published as the extra `-plugin.xml` artifact.
+ </td>
+                        </tr>
+                        
+                        <tr class="altColor">
                             <td class="colFirst"><code><strong>Property&lt;groovy.lang.Closure&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#pomCustomization">pomCustomization</a></code><br>An optional closure to be invoked via pom.withXml { } to allow further customization</td>
                         </tr>
                         
-                        <tr class="altColor">
+                        <tr class="rowColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.String&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#publicationName">publicationName</a></code><br>The name of the publication. </td>
                         </tr>
                         
-                        <tr class="rowColor">
+                        <tr class="altColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.Boolean&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#publishTestSources">publishTestSources</a></code><br>Whether to publish test sources with a "tests" classifier</td>
                         </tr>
                         
-                        <tr class="altColor">
+                        <tr class="rowColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.String&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#scmUrl">scmUrl</a></code><br>The SCM url, defaults based on the github slug to https://github.com/${githubSlug}</td>
                         </tr>
                         
-                        <tr class="rowColor">
+                        <tr class="altColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.String&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#scmUrlConnection">scmUrlConnection</a></code><br>The url to connect via SCM tool, defaults based on the github slug to "scm:git@github.com:${githubSlug}.git"</td>
                         </tr>
                         
-                        <tr class="altColor">
+                        <tr class="rowColor">
                             <td class="colFirst"><code><strong>Property&lt;Directory&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#testRepositoryPath">testRepositoryPath</a></code><br>If set, a local repository will be setup for the given path with the name 'TestCaseMavenRepo'. </td>
                         </tr>
                         
-                        <tr class="rowColor">
+                        <tr class="altColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.String&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#title">title</a></code><br>Title of the project, defaults to the project name</td>
                         </tr>
                         
-                        <tr class="altColor">
+                        <tr class="rowColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.Boolean&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#transitiveDependencies">transitiveDependencies</a></code><br>Validate that any transitive dependency has a version set in the pom & try to set it if not defined</td>
                         </tr>
                         
-                        <tr class="rowColor">
+                        <tr class="altColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.String&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#vcsUrl">vcsUrl</a></code><br>The source control URL of the project</td>
                         </tr>
                         
-                        <tr class="altColor">
+                        <tr class="rowColor">
                             <td class="colFirst"><code><strong>Property&lt;java.lang.String&gt;</strong></code>&nbsp;</td>
                             <td class="colLast"><code><a href="#websiteUrl">websiteUrl</a></code><br>The website URL of the published project; defaulted by the github slug if not set</td>
                         </tr>
@@ -500,6 +506,19 @@ extends java.lang.Object</pre>
                             <li class="blockList">
                                 <h4>@org.gradle.api.tasks.Nested<br>final&nbsp;<a href='../../../../../org/apache/grails/gradle/publish/Organization.html'>Organization</a> <strong>organization</strong></h4>
                                 <p> The organization that produces the project</p>
+                            </li>
+                        </ul>
+                    
+                        <a name="pluginDescriptor"><!-- --></a>
+                        <ul class="blockListLast">
+                            <li class="blockList">
+                                <h4>final&nbsp;<a href='../../../../../org.gradle.api.file.RegularFileProperty.html'>RegularFileProperty</a> <strong>pluginDescriptor</strong></h4>
+                                <p> The Grails plugin descriptor (META-INF/grails-plugin.xml) published as the extra `-plugin.xml` artifact.
+ Defaults to the descriptor the Grails compiler writes into the main Groovy classes when the Grails plugin
+ Gradle plugin is applied and a plugin class (<CODE>*GrailsPlugin.groovy</CODE>) exists, so the artifact is built
+ together with the classes. A build producing the descriptor itself can set it from the producing task, e.g.
+ <CODE>tasks.named('compileGroovy', GroovyCompile).flatMap { it.destinationDirectory.file('META-INF/grails-plugin.xml') </CODE>}.
+ When unset, a descriptor that already exists in the compiled classes is still published.</p>
                             </li>
                         </ul>
                     
