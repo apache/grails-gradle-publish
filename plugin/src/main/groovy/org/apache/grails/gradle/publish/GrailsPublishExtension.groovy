@@ -23,6 +23,7 @@ import org.gradle.api.Action
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Project
 import org.gradle.api.file.Directory
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
@@ -130,6 +131,16 @@ class GrailsPublishExtension {
     final Property<String> publicationName
 
     /**
+     * The Grails plugin descriptor (META-INF/grails-plugin.xml) published as the extra `-plugin.xml` artifact.
+     * Defaults to the descriptor the Grails compiler writes into the main Groovy classes when the Grails plugin
+     * Gradle plugin is applied and a plugin class ({@code *GrailsPlugin.groovy}) exists, so the artifact is built
+     * together with the classes. A build producing the descriptor itself can set it from the producing task, e.g.
+     * {@code tasks.named('compileGroovy', GroovyCompile).flatMap { it.destinationDirectory.file('META-INF/grails-plugin.xml') }}.
+     * When unset, a descriptor that already exists in the compiled classes is still published.
+     */
+    final RegularFileProperty pluginDescriptor
+
+    /**
      * If set, a local repository will be setup for the given path with the name 'TestCaseMavenRepo'. This can be useful
      * when testing plugins locally with builds that can't make use of includedBuild
      */
@@ -195,6 +206,7 @@ class GrailsPublishExtension {
             project.group as String
         })
         publishTestSources = objects.property(Boolean).convention(false)
+        pluginDescriptor = objects.fileProperty()
         testRepositoryPath = objects.directoryProperty().convention(null as Directory)
         pomCustomization = objects.property(Closure).convention(null as Closure)
         addComponents = objects.property(Boolean).convention(true)

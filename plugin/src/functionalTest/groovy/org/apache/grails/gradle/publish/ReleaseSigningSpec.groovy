@@ -16,38 +16,31 @@
  *  specific language governing permissions and limitations
  *  under the License.
  */
+
 package org.apache.grails.gradle.publish
 
+import org.apache.grails.gradle.publish.examples.TestSigningKey
 import org.gradle.testkit.runner.GradleRunner
-import spock.lang.Requires
 import spock.lang.Shared
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.TimeUnit
-
 /**
- * Signs and publishes releases with a throwaway GPG key, to cover the sign and publish task wiring.
+ * Signs and publishes releases with a throwaway key, to cover the sign and publish task wiring. The key is generated
+ * in process and used through a keyring file, so no gpg command is needed; signing with the gpg command is covered
+ * by ContainerizedReleaseSpec, inside a container.
  */
-@Requires({ ReleaseSigningSpec.gpgAvailable() })
 class ReleaseSigningSpec extends GradleSpecification {
 
     @Shared
-    Path gnupgHome
+    TestSigningKey key
 
     @Shared
-    String keyId
+    File keyring
 
     List<File> toCleanup = []
 
     void setupSpec() {
-        // keep the path short, since gpg-agent's socket path is limited in length
-        gnupgHome = Files.createTempDirectory('gpg')
-        gpg('--batch', '--passphrase', '', '--quick-gen-key', 'Throwaway Test Key <throwaway@example.invalid>', 'rsa2048', 'sign', 'never')
-        keyId = gpg('--list-keys', '--with-colons').readLines()
-                .find { it.startsWith('pub:') }
-                .split(':')[4]
-                .takeRight(8)
+        key = TestSigningKey.generate()
+        keyring = key.writeSecretKeyRing(new File(File.createTempDir('release-signing'), 'secring.gpg'))
     }
 
     void cleanup() {
@@ -55,8 +48,7 @@ class ReleaseSigningSpec extends GradleSpecification {
     }
 
     void cleanupSpec() {
-        runGpgconf('--kill', 'gpg-agent')
-        gnupgHome.toFile().deleteDir()
+        keyring.parentFile.deleteDir()
     }
 
     def "a signed release signs every published file - #description"() {
@@ -66,17 +58,10 @@ class ReleaseSigningSpec extends GradleSpecification {
         toCleanup << repository << mavenLocal
 
         and:
-        GradleRunner runner = setupTestResourceProject('other-artifacts', fixture)
-        runner = setGradleProperty('projectVersion', '0.0.1', runner)
-        runner = setGradleProperty('releasePublishType', 'MAVEN_PUBLISH', runner)
+        GradleRunner runner = signingRelease(setupTestResourceProject('other-artifacts', fixture))
         runner = setGradleProperty('mavenPublishUrl', repository.absolutePath, runner)
-        runner = addEnvironmentVariable('GRAILS_PUBLISH_RELEASE', 'true', runner)
-        // the build environment is otherwise empty, and signing runs the gpg command
-        runner = addEnvironmentVariable('PATH', System.getenv('PATH'), runner)
-        runner = addEnvironmentVariable('GNUPGHOME', gnupgHome.toAbsolutePath().toString(), runner)
-        runner = addEnvironmentVariable('SIGNING_KEY', keyId, runner)
-        environment.each { String key, String value ->
-            runner = addEnvironmentVariable(key, value, runner)
+        environment.each { String name, String value ->
+            runner = addEnvironmentVariable(name, value, runner)
         }
 
         when:
@@ -107,16 +92,10 @@ class ReleaseSigningSpec extends GradleSpecification {
         toCleanup << repository
 
         and:
-        GradleRunner runner = setupTestResourceProject('other-artifacts', 'grails-plugin-project')
-        runner = setGradleProperty('projectVersion', '0.0.1', runner)
-        runner = setGradleProperty('releasePublishType', 'MAVEN_PUBLISH', runner)
+        GradleRunner runner = signingRelease(setupTestResourceProject('other-artifacts', 'grails-plugin-project'))
         runner = setGradleProperty('mavenPublishUrl', repository.absolutePath, runner)
-        runner = addEnvironmentVariable('GRAILS_PUBLISH_RELEASE', 'true', runner)
-        runner = addEnvironmentVariable('PATH', System.getenv('PATH'), runner)
-        runner = addEnvironmentVariable('GNUPGHOME', gnupgHome.toAbsolutePath().toString(), runner)
-        runner = addEnvironmentVariable('SIGNING_KEY', keyId, runner)
 
-        and: 'the grails-plugin.xml exists, as the plugin only publishes it when it does at configuration time'
+        and: 'the grails-plugin.xml exists: without the Grails plugin Gradle plugin, it is only published when it does at configuration time'
         executeTask('classes', runner)
 
         when:
@@ -131,6 +110,35 @@ class ReleaseSigningSpec extends GradleSpecification {
         !new File(runner.projectDir, 'build/classes/groovy/main/META-INF/grails-plugin.xml.asc').exists()
     }
 
+    def "a signed release of a Grails plugin project publishes the descriptor built by compileGroovy from a clean checkout"() {
+        given:
+        File repository = File.createTempDir('release-repository')
+        toCleanup << repository
+
+        and:
+        GradleRunner runner = signingRelease(setupTestResourceProject('other-artifacts', 'grails-plugin-descriptor'))
+        runner = setGradleProperty('mavenPublishUrl', repository.absolutePath, runner)
+
+        when: 'publishing without having compiled anything before'
+        executeTask('publish', runner)
+
+        then:
+        File publishedPluginXml = new File(repository, 'org/grails/example/grails-plugin-descriptor/0.0.1/grails-plugin-descriptor-0.0.1-plugin.xml')
+        publishedPluginXml.text.contains("<plugin name='descriptorPlugin' version='0.0.1'")
+        signatureVerifies(publishedPluginXml)
+        !new File(runner.projectDir, 'build/classes/groovy/main/META-INF/grails-plugin.xml.asc').exists()
+    }
+
+    /** A release build that signs with the keyring file */
+    private GradleRunner signingRelease(GradleRunner runner) {
+        runner = setGradleProperty('projectVersion', '0.0.1', runner)
+        runner = setGradleProperty('releasePublishType', 'MAVEN_PUBLISH', runner)
+        runner = addEnvironmentVariable('GRAILS_PUBLISH_RELEASE', 'true', runner)
+        runner = addEnvironmentVariable('SIGNING_KEY', key.keyId, runner)
+        runner = addEnvironmentVariable('SIGNING_KEYRING', keyring.absolutePath, runner)
+        addEnvironmentVariable('SIGNING_PASSPHRASE', key.passphrase, runner)
+    }
+
     private static List<File> publishedFiles(File directory) {
         List<File> files = []
         directory.eachFileRecurse { File file ->
@@ -141,56 +149,9 @@ class ReleaseSigningSpec extends GradleSpecification {
         files
     }
 
-    /**
-     * Whether the file's .asc signature exists and verifies against the throwaway key.
-     */
+    /** Whether the file's .asc signature exists and verifies against the throwaway key */
     private boolean signatureVerifies(File file) {
         File signature = new File("${file.path}.asc")
-        if (!signature.exists()) {
-            return false
-        }
-        try {
-            gpg('--batch', '--verify', signature.path, file.path)
-            true
-        } catch (IllegalStateException ignored) {
-            false
-        }
-    }
-
-    private String gpg(String... arguments) {
-        run(['gpg', '--homedir', gnupgHome.toString()] + arguments.toList())
-    }
-
-    private void runGpgconf(String... arguments) {
-        try {
-            run(['gpgconf', '--homedir', gnupgHome.toString()] + arguments.toList())
-        } catch (Exception ignored) {
-            // the agent is gone with the temporary directory either way
-        }
-    }
-
-    private static String run(List<String> command) {
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start()
-        // read the output on a separate thread, since reading it here would only return once gpg exits
-        StringBuilder output = new StringBuilder()
-        Thread reader = process.consumeProcessOutputStream(output)
-        if (!process.waitFor(2, TimeUnit.MINUTES)) {
-            process.destroyForcibly()
-            throw new IllegalStateException("${command.join(' ')} timed out:\n${output}")
-        }
-        reader.join()
-        if (process.exitValue() != 0) {
-            throw new IllegalStateException("${command.join(' ')} failed:\n${output}")
-        }
-        output.toString()
-    }
-
-    static boolean gpgAvailable() {
-        try {
-            run(['gpg', '--version'])
-            true
-        } catch (Exception ignored) {
-            false
-        }
+        signature.exists() && key.verifies(file, signature)
     }
 }
