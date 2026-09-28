@@ -51,9 +51,13 @@ class ContainerizedReleaseSpec extends ExampleProjectSpecification {
     static final String RELEASE_VERSION = '4.5.6'
     static final String HOST = 'host.testcontainers.internal'
 
-    /** The official Gradle image (a JDK plus the same Gradle version as this build's wrapper) with gpg added */
+    /**
+     * The official Gradle image with gpg added: the same Gradle version as this build's wrapper, and the JDK major
+     * version running these tests, since the plugin under test was compiled by it (its Groovy classes target the
+     * compiling JDK) and must load inside the container.
+     */
     static final String DOCKERFILE = """\
-        FROM gradle:${wrapperGradleVersion()}-jdk17
+        FROM gradle:${wrapperGradleVersion()}-jdk${Runtime.version().feature()}
         USER root
         RUN apt-get update && apt-get install -y --no-install-recommends gnupg && rm -rf /var/lib/apt/lists/*
         """.stripIndent()
