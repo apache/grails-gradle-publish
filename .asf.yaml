@@ -15,37 +15,22 @@ github:
   environments:
     release:
       required_reviewers:
-        - id: jdaugherty
-          type: User
-        - id: matrei
-          type: User
-        - id: jamesfredley
-          type: User
-        - id: sbglasius
-          type: User
+        - id: grails-public
+          type: Team
       wait_timer: 0
+      prevent_self_review: false
     docs:
       required_reviewers:
-        - id: jdaugherty
-          type: User
-        - id: matrei
-          type: User
-        - id: jamesfredley
-          type: User
-        - id: sbglasius
-          type: User
+        - id: grails-public
+          type: Team
       wait_timer: 0
+      prevent_self_review: false
     close:
       required_reviewers:
-        - id: jdaugherty
-          type: User
-        - id: matrei
-          type: User
-        - id: jamesfredley
-          type: User
-        - id: sbglasius
-          type: User
+        - id: grails-public
+          type: Team
       wait_timer: 0
+      prevent_self_review: false
   rulesets:
     - name: "Default Branch Protection"
       type: branch
