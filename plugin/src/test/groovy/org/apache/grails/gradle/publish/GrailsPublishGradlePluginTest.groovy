@@ -20,8 +20,10 @@
 package org.apache.grails.gradle.publish
 
 import org.gradle.api.GradleException
+import org.gradle.api.InvalidUserDataException
 import org.gradle.api.component.SoftwareComponentFactory
 import org.gradle.api.internal.project.ProjectInternal
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.testfixtures.ProjectBuilder
@@ -30,6 +32,37 @@ import spock.lang.Specification
 import javax.inject.Inject
 
 class GrailsPublishGradlePluginTest extends Specification {
+
+    def 'findProjectProperty reads the project itself before its parent projects'() {
+        given:
+        def root = ProjectBuilder.builder().withName('root').build()
+        def child = ProjectBuilder.builder().withName('child').withParent(root).build()
+        root.extensions.extraProperties.set('githubSlug', 'from/root')
+        root.extensions.extraProperties.set('onlyOnRoot', 'from/root')
+        child.extensions.extraProperties.set('githubSlug', 'from/child')
+        child.version = '1.0.0-SNAPSHOT'
+        child.plugins.apply('groovy')
+        child.plugins.apply(GrailsPublishGradlePlugin)
+        GrailsPublishGradlePlugin plugin = child.plugins.getPlugin(GrailsPublishGradlePlugin)
+
+        expect: 'the project itself wins; a parent is read explicitly (Gradle 10 removes the implicit lookup) when Isolated Projects is off'
+        plugin.findProjectProperty(child, 'githubSlug') == 'from/child'
+        plugin.findProjectProperty(child, 'onlyOnRoot') == 'from/root'
+        plugin.findProjectProperty(child, 'notSetAnywhere') == null
+    }
+
+    def 'a plugin extending this one can declare its own injected constructor'() {
+        given: 'a subclass shaped like the grails-core profile publish plugin'
+        def project = ProjectBuilder.builder().build()
+        project.version = '1.0.0-SNAPSHOT'
+        project.plugins.apply('groovy')
+
+        when:
+        project.plugins.apply(ExtendingPublishPlugin)
+
+        then: 'the injected build features are available to the base class'
+        project.extensions.findByType(GrailsPublishExtension) != null
+    }
 
     def 'requires java or java platform plugin'() {
         given:
@@ -423,8 +456,8 @@ class GrailsPublishGradlePluginTest extends Specification {
         }
 
         then:
-        def iae = thrown(IllegalArgumentException)
-        iae.message == 'An additional publication named `cli` is already registered.'
+        def iude = thrown(InvalidUserDataException)
+        iude.message == 'An additional publication named `cli` is already registered.'
     }
 
     private static boolean causeChainContains(Throwable throwable, String expected) {
@@ -436,6 +469,16 @@ class GrailsPublishGradlePluginTest extends Specification {
             current = current.cause
         }
         false
+    }
+
+    static class ExtendingPublishPlugin extends GrailsPublishGradlePlugin {
+
+        final ObjectFactory objectFactory
+
+        @Inject
+        ExtendingPublishPlugin(ObjectFactory objectFactory) {
+            this.objectFactory = objectFactory
+        }
     }
 
     static abstract class ComponentFactoryHolder {

@@ -44,8 +44,9 @@ tasks.named('rat') {
             '**/*.gitkeep', // Empty Gitkeep file
             'build/**', // build directories
             'buildSrc/build/**', // build directories
+            'examples/**/build/**', // build directories of the example projects when run by hand
     ] + rootProject.subprojects.collect { "${rootProject.projectDir.relativePath(it.layout.buildDirectory.get().asFile).toString()}/**/*" }
-    // logger.lifecycle("Excludes for RAT task: ${allExcludes.join(', \n')}")
+    // logger.lifecycle('Excludes for RAT task: {}', allExcludes.join(', \n'))
     excludes = allExcludes
     // never cache license audits
     it.outputs.upToDateWhen { false }

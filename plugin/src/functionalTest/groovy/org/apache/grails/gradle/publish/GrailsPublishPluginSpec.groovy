@@ -483,7 +483,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         projectDir.resolve('build.gradle').toFile().text = """
             buildscript {
                 repositories {
-                    maven { url "\${System.getenv('LOCAL_MAVEN_PATH')}\" }
+                    maven { url = System.getenv('LOCAL_MAVEN_PATH') }
                     maven { url = 'https://repo.grails.org/grails/restricted' }
                     maven { url = 'https://repository.apache.org/content/groups/snapshots' }
                 }
@@ -492,8 +492,8 @@ class GrailsPublishPluginSpec extends GradleSpecification {
                 }
             }
             
-            version "0.0.1-SNAPSHOT"
-            group "org.grails.example"
+            version = "0.0.1-SNAPSHOT"
+            group = "org.grails.example"
 
             apply plugin: 'java-library'
             apply plugin: 'groovy'
@@ -552,7 +552,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         projectDir.resolve('build.gradle').toFile().text = """
             buildscript {
                 repositories {
-                    maven { url "\${System.getenv('LOCAL_MAVEN_PATH')}\" }
+                    maven { url = System.getenv('LOCAL_MAVEN_PATH') }
                     maven { url = 'https://repo.grails.org/grails/restricted' }
                     maven { url = 'https://repository.apache.org/content/groups/snapshots' }
                 }
@@ -561,7 +561,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
                 }
             }
             
-            version "0.0.1"
+            version = "0.0.1"
             
             apply plugin: 'org.apache.grails.gradle.grails-publish'
         """
@@ -589,7 +589,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         projectDir.resolve('build.gradle').toFile().text = """
             buildscript {
                 repositories {
-                    maven { url "\${System.getenv('LOCAL_MAVEN_PATH')}\" }
+                    maven { url = System.getenv('LOCAL_MAVEN_PATH') }
                     maven { url = 'https://repo.grails.org/grails/restricted' }                    
                     maven { url = 'https://repository.apache.org/content/groups/snapshots' }
                 }
@@ -598,7 +598,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
                 }
             }
             
-            version "0.0.1"
+            version = "0.0.1"
             
             apply plugin: 'java'
             apply plugin: 'org.apache.grails.gradle.grails-publish'
@@ -1265,5 +1265,268 @@ tasks.named('javadoc', Javadoc) {
 
         then: 'the configuration cache entry is reusable'
         cachedResult.output.contains('Reusing configuration cache.')
+    }
+
+    def "testSourcesJar is compatible with the configuration cache"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'test-sources')
+
+        when:
+        def result = executeTask("testSourcesJar", ["--configuration-cache", "--configuration-cache-problems=fail"], runner)
+
+        then: 'the onlyIf check runs without needing the project'
+        assertTaskSuccess("testSourcesJar", result)
+        findJarFileEntry("org/grails/example/MyProjectTest.class", new File(runner.projectDir, 'build/libs/test-sources-0.0.1-SNAPSHOT-tests.jar'))
+
+        when: 'the build runs again'
+        def cachedResult = executeTask("testSourcesJar", ["--configuration-cache", "--configuration-cache-problems=fail", "--rerun-tasks"], runner)
+
+        then: 'the configuration cache entry is reusable'
+        cachedResult.output.contains('Reusing configuration cache.')
+        assertTaskSuccess("testSourcesJar", cachedResult)
+    }
+
+    def "gradle properties are used by the plugin applied in a subproject"() {
+        given:
+        File tempDir = File.createTempDir("properties-from-parent-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask(":subproject:publish", runner)
+
+        then: 'mavenPublishUrl is read from ORG_GRADLE_PROJECT_mavenPublishUrl'
+        assertTaskSuccess("publish", result)
+
+        and: 'githubSlug is read from the root gradle.properties'
+        File pom = tempDir.toPath().resolve("org/grails/example/subproject/0.0.1-SNAPSHOT").toFile()
+                .listFiles().find { it.name.endsWith(".pom") }
+        pom.text.contains("<url>https://github.com/apache/grails-from-gradle-properties</url>")
+    }
+
+    def "a publish type set only on a parent project is used, with a warning"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = addEnvironmentVariable("SET_PUBLISH_TYPE_ON_PARENT", "true", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+// the Nexus plugin must be applied to the root project before the subprojects are evaluated
+apply plugin: 'io.github.gradle-nexus.publish-plugin'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", ["--info"], runner)
+
+        then: 'the parent value is honoured, as it was through the implicit lookup Gradle 10 removes'
+        assertTaskSuccess("assemble", result)
+        result.output.contains("Nexus Publish is enabled for project subproject")
+
+        and: 'the build is told to declare it where Isolated Projects can read it'
+        result.output.contains("Property `snapshotPublishType` of project ':subproject' was read from root project 'properties-from-parent-project'.")
+        result.output.contains("parent project properties cannot be read with Isolated Projects")
+    }
+
+    def "a gradle plugin project publishes through the pluginMaven publication - java-gradle-plugin applied first: #javaGradlePluginFirst"() {
+        given:
+        File tempDir = File.createTempDir("gradle-plugin-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+        if (javaGradlePluginFirst) {
+            runner = addEnvironmentVariable("APPLY_JAVA_GRADLE_PLUGIN_FIRST", "true", runner)
+        }
+
+        when:
+        def result = executeTask("publish", runner)
+
+        then: 'only the pluginMaven publication and the plugin marker are published, not a second copy of the artifacts'
+        result.tasks*.path.findAll { it.startsWith(':publish') && it.endsWith('ToMavenRepository') }.toSet() == [
+                ':publishPluginMavenPublicationToMavenRepository',
+                ':publishExamplePluginMarkerMavenPublicationToMavenRepository',
+        ] as Set
+
+        and: 'the pluginMaven publication is configured by the plugin'
+        File pom = tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile()
+                .listFiles().find { it.name.endsWith(".pom") }
+        pom.text.contains("<description>A testing project for the grails gradle plugin</description>")
+
+        where:
+        javaGradlePluginFirst << [true, false]
+    }
+
+    def "a gradle plugin project publishes its test sources through the pluginMaven publication"() {
+        given:
+        File tempDir = File.createTempDir("gradle-plugin-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        and:
+        File testSource = new File(runner.projectDir, 'src/test/groovy/org/grails/example/MyProjectTest.groovy')
+        testSource.parentFile.mkdirs()
+        testSource.text = 'package org.grails.example\n\nclass MyProjectTest {}\n'
+        new File(runner.projectDir, 'build.gradle') << """
+grailsPublish {
+    publishTestSources = true
+}
+"""
+
+        when:
+        executeTask("publish", runner)
+
+        then:
+        File[] published = tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile().listFiles()
+        File testsJar = published.find { it.name.endsWith("-tests.jar") }
+        testsJar
+        findJarFileEntry("org/grails/example/MyProjectTest.class", testsJar)
+    }
+
+    def "a gradle plugin project fails clearly when it declares an additional publication"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        new File(runner.projectDir, 'build.gradle') << """
+grailsPublish {
+    additionalPublication('cli') {
+    }
+}
+"""
+
+        when:
+        executeTask("assemble", runner)
+
+        then:
+        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
+        bf.buildResult.output.contains("Additional publications are not supported for project `gradle-plugin-project`, since the java-gradle-plugin adds the java component to its `pluginMaven` publication")
+    }
+
+    def "a publication created by the build with the same name is not reused"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'simple-project')
+        new File(runner.projectDir, 'build.gradle') << """
+publishing {
+    publications {
+        maven(MavenPublication) {
+        }
+    }
+}
+"""
+
+        when:
+        executeTask("assemble", runner)
+
+        then:
+        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
+        bf.buildResult.output.contains("Cannot add a Publication with name 'maven' as a Publication with that name already exists.")
+    }
+
+    def "publishing the grails-plugin.xml does not compile the tests"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'grails-plugin-project')
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        and: 'a test class, and the grails-plugin.xml from an earlier build'
+        File testSource = new File(runner.projectDir, 'src/test/groovy/org/grails/example/MyProjectTest.groovy')
+        testSource.parentFile.mkdirs()
+        testSource.text = 'package org.grails.example\n\nclass MyProjectTest {}\n'
+        executeTask("classes", runner)
+
+        when:
+        def result = executeTask("publishToMavenLocal", ["--dry-run"], runner)
+
+        then: 'the extra artifact is published'
+        result.output.contains(":grailsPublishExtraArtifact SKIPPED")
+
+        and: 'the tests are not compiled, as publishTestSources is off'
+        !result.output.contains(":compileTestGroovy")
+        !result.output.contains(":testClasses")
+    }
+
+    def "a Nexus URL set only on a parent project is used by a build publishing through Nexus, with a warning"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = setGradleProperty("snapshotPublishType", "NEXUS_PUBLISH", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+// the Nexus plugin must be applied to the root project before the subprojects are evaluated
+apply plugin: 'io.github.gradle-nexus.publish-plugin'
+
+ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", runner)
+
+        then:
+        assertTaskSuccess("assemble", result)
+        result.output.contains("Property `nexusPublishUrl` of project ':subproject' was read from root project 'properties-from-parent-project'.")
+    }
+
+    def "a Nexus URL set on a parent project takes precedence over the environment variable, as any property does"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = setGradleProperty("snapshotPublishType", "NEXUS_PUBLISH", runner)
+        runner = addEnvironmentVariable("NEXUS_PUBLISH_URL", "https://nexus.example.invalid/service/local/", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+// the Nexus plugin must be applied to the root project before the subprojects are evaluated
+apply plugin: 'io.github.gradle-nexus.publish-plugin'
+
+ext.nexusPublishUrl = 'https://other.example.invalid/service/local/'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", runner)
+
+        then:
+        assertTaskSuccess("assemble", result)
+        result.output.contains("Property `nexusPublishUrl` of project ':subproject' was read from root project 'properties-from-parent-project'.")
+    }
+
+    def "a gradle plugin project without automated publishing keeps the maven publication"() {
+        given:
+        File tempDir = File.createTempDir("gradle-plugin-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+gradlePlugin {
+    automatedPublishing = false
+}
+"""
+
+        when:
+        def result = executeTask("publish", runner)
+
+        then: 'there is no pluginMaven publication, so the maven publication keeps its name and gets the java component'
+        result.tasks*.path.findAll { it.startsWith(':publish') && it.endsWith('ToMavenRepository') }.toSet() == [
+                ':publishMavenPublicationToMavenRepository',
+        ] as Set
+        tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile()
+                .listFiles().any { it.name ==~ /gradle-plugin-project-0\.0\.1-[0-9.]+-[0-9]+\.jar/ }
+    }
+
+    def "a Nexus URL set on a parent project does not fail a build publishing with Maven"() {
+        given: 'a snapshot with the default publish type, which publishes with Maven'
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        new File(runner.projectDir, 'build.gradle') << """
+ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", runner)
+
+        then:
+        assertTaskSuccess("assemble", result)
     }
 }

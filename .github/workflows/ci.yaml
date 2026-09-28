@@ -16,8 +16,10 @@
 name: "CI"
 on:
   push:
+    # only the release lines build on push (and publish snapshots); every other branch builds through its pull request
     branches:
-      - '**'      # all branches
+      - 'main'
+      - '[0-9]+.[0-9]+.x'
     tags-ignore:
       - '**'   # ignore any tag ref
   pull_request:
