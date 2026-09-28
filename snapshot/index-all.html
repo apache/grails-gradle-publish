@@ -126,7 +126,11 @@ if (location.href.indexOf('is-external=true') == -1) {
 <dl>
 
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html#addComponents" title="Property in GrailsPublishExtension">addComponents</a></span> - Property in <a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html">GrailsPublishExtension</a>
-</dt><dd> <div class="block">If another process will add the components set this to false so only the publication is created</div></dd>
+</dt><dd> <div class="block">If another process will add the components set this to false so only the publication is created.
+ </div></dd>
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#addExtraArtifact(org.gradle.api.Project, org.apache.grails.gradle.publish.GrailsPublishExtension, org.gradle.api.publish.maven.MavenPublication)" title="Method in GrailsPublishGradlePlugin">addExtraArtifact(org.gradle.api.Project, org.apache.grails.gradle.publish.GrailsPublishExtension, org.gradle.api.publish.maven.MavenPublication)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block">Attaches the extra artifact of the primary publication: the configured plugin descriptor, built by whatever
+ produces it, or (for builds that create the descriptor some other way) a descriptor that already exists.</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#addInstallTaskAliases(org.gradle.api.Project)" title="Method in GrailsPublishGradlePlugin">addInstallTaskAliases(org.gradle.api.Project)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
 </dt><dd> <div class="block"></div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/AdditionalPublication.html" title="Class in org.apache.grails.gradle.publish">AdditionalPublication</a></span> - Class in <a href="./org/apache/grails/gradle/publish/package-summary.html">org.apache.grails.gradle.publish</a>
@@ -178,6 +182,9 @@ if (location.href.indexOf('is-external=true') == -1) {
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/AdditionalPublication.html#componentName" title="Property in AdditionalPublication">componentName</a></span> - Property in <a href="org/apache/grails/gradle/publish/AdditionalPublication.html">AdditionalPublication</a>
 </dt><dd> <div class="block">The software component to publish; the component must exist by the time the project is
  evaluated (e.g. created via SoftwareComponentFactory.adhoc). </div></dd>
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#configureModuleMetadataVersions(org.gradle.api.Project, org.apache.grails.gradle.publish.GrailsPublishExtension, java.lang.String, List<String>)" title="Method in GrailsPublishGradlePlugin">configureModuleMetadataVersions(org.gradle.api.Project, org.apache.grails.gradle.publish.GrailsPublishExtension, java.lang.String, List&lt;String&gt;)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block">Gradle module metadata is generated from version mapping, which resolves every `java-api` variant from the
+ main runtime classpath. </div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#configurePom(org.gradle.api.Project, org.apache.grails.gradle.publish.GrailsPublishExtension, org.gradle.api.publish.maven.MavenPublication, Provider<String>, Provider<String>, Provider<Closure>, List<String>)" title="Method in GrailsPublishGradlePlugin">configurePom(org.gradle.api.Project, org.apache.grails.gradle.publish.GrailsPublishExtension, org.gradle.api.publish.maven.MavenPublication, Provider&lt;String&gt;, Provider&lt;String&gt;, Provider&lt;Closure&gt;, List&lt;String&gt;)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
 </dt><dd> <div class="block">Configures the pom metadata shared by every publication (primary and additional) from the
  extension, with the title, description, and pom customization supplied per publication.</div></dd>
@@ -196,6 +203,9 @@ if (location.href.indexOf('is-external=true') == -1) {
 <h2 class="title">D</h2>
 <dl>
 
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#defaultPluginDescriptor(org.gradle.api.Project)" title="Method in GrailsPublishGradlePlugin">defaultPluginDescriptor(org.gradle.api.Project)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block">The descriptor the Grails compiler writes while compiling the main Groovy sources of a Grails plugin project.
+ </div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/AdditionalPublication.html#desc" title="Property in AdditionalPublication">desc</a></span> - Property in <a href="org/apache/grails/gradle/publish/AdditionalPublication.html">AdditionalPublication</a>
 </dt><dd> <div class="block">Description of the publication, defaults to the primary publication's description</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html#desc" title="Property in GrailsPublishExtension">desc</a></span> - Property in <a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html">GrailsPublishExtension</a>
@@ -226,6 +236,9 @@ if (location.href.indexOf('is-external=true') == -1) {
 <h2 class="title">F</h2>
 <dl>
 
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#formatLikeGradle(java.lang.String)" title="Method in GrailsPublishGradlePlugin">formatLikeGradle(java.lang.String)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block">Pretty prints the JSON the way Gradle writes module metadata: two spaces per level (JsonOutput uses four) and
+ a trailing newline, so a rewritten file only differs from an untouched one where a version was added.</div></dd>
 </dl>
 
     
@@ -233,6 +246,9 @@ if (location.href.indexOf('is-external=true') == -1) {
 <h2 class="title">G</h2>
 <dl>
 
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#getBuildFeatures()" title="Method in GrailsPublishGradlePlugin">getBuildFeatures()</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block">Injected through a getter rather than the constructor, so plugins extending this one keep working with their own
+ constructors.</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#getDefaultClassifier()" title="Method in GrailsPublishGradlePlugin">getDefaultClassifier()</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
 </dt><dd> <div class="block"></div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#getDefaultExtraArtifact(org.gradle.api.Project)" title="Method in GrailsPublishGradlePlugin">getDefaultExtraArtifact(org.gradle.api.Project)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
@@ -253,6 +269,8 @@ if (location.href.indexOf('is-external=true') == -1) {
 </dt><dd> <div class="block">The slug from github</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/License.html#GPL" title="Property in License">GPL</a></span> - Property in <a href="org/apache/grails/gradle/publish/License.html">License</a>
 </dt><dd> <div class="block"></div></dd>
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#GRAILS_PLUGIN_IDS" title="Field in GrailsPublishGradlePlugin">GRAILS_PLUGIN_IDS</a></span> - Field in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block">The Gradle plugins under which the Grails compiler generates META-INF/grails-plugin.xml</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html" title="Class in org.apache.grails.gradle.publish">GrailsPublishExtension</a></span> - Class in <a href="./org/apache/grails/gradle/publish/package-summary.html">org.apache.grails.gradle.publish</a>
 </dt><dd><div class="block"></div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html#GrailsPublishExtension(org.gradle.api.model.ObjectFactory, org.gradle.api.Project)" title="Constructor in GrailsPublishExtension">GrailsPublishExtension(org.gradle.api.model.ObjectFactory, org.gradle.api.Project)</a></span> - Constructor in <a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html">GrailsPublishExtension</a>
@@ -282,6 +300,9 @@ if (location.href.indexOf('is-external=true') == -1) {
 <h2 class="title">I</h2>
 <dl>
 
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#isComponentAddedByJavaGradlePlugin(org.gradle.api.Project, java.lang.String)" title="Method in GrailsPublishGradlePlugin">isComponentAddedByJavaGradlePlugin(org.gradle.api.Project, java.lang.String)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block">Whether the java-gradle-plugin adds the java component to the publication, which it does for its pluginMaven
+ publication unless its automated publishing is disabled.</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html#issueTrackerName" title="Property in GrailsPublishExtension">issueTrackerName</a></span> - Property in <a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html">GrailsPublishExtension</a>
 </dt><dd> <div class="block">The issue tracker name; github if github slug is set and not overridden</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html#issueTrackerUrl" title="Property in GrailsPublishExtension">issueTrackerUrl</a></span> - Property in <a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html">GrailsPublishExtension</a>
@@ -326,6 +347,8 @@ if (location.href.indexOf('is-external=true') == -1) {
 <h2 class="title">M</h2>
 <dl>
 
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#MAIN_GROOVY_COMPILE_TASK" title="Field in GrailsPublishGradlePlugin">MAIN_GROOVY_COMPILE_TASK</a></span> - Field in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block"></div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#MAVEN_PUBLISH_PLUGIN_ID" title="Field in GrailsPublishGradlePlugin">MAVEN_PUBLISH_PLUGIN_ID</a></span> - Field in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
 </dt><dd> <div class="block"></div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/PublishType.html#MAVEN_PUBLISH" title="Enum Constant in PublishType">MAVEN_PUBLISH</a></span> - Enum Constant in <a href="org/apache/grails/gradle/publish/PublishType.html">PublishType</a>
@@ -371,13 +394,18 @@ if (location.href.indexOf('is-external=true') == -1) {
 <h2 class="title">P</h2>
 <dl>
 
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#PLUGIN_DESCRIPTOR_PATH" title="Field in GrailsPublishGradlePlugin">PLUGIN_DESCRIPTOR_PATH</a></span> - Field in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block"></div></dd>
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html#pluginDescriptor" title="Property in GrailsPublishExtension">pluginDescriptor</a></span> - Property in <a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html">GrailsPublishExtension</a>
+</dt><dd> <div class="block">The Grails plugin descriptor (META-INF/grails-plugin.xml) published as the extra `-plugin.xml` artifact.
+ </div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/AdditionalPublication.html#pomCustomization" title="Property in AdditionalPublication">pomCustomization</a></span> - Property in <a href="org/apache/grails/gradle/publish/AdditionalPublication.html">AdditionalPublication</a>
 </dt><dd> <div class="block">An optional closure to be invoked via pom.withXml { } to allow further customization of
  this publication's pom</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html#pomCustomization" title="Property in GrailsPublishExtension">pomCustomization</a></span> - Property in <a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html">GrailsPublishExtension</a>
 </dt><dd> <div class="block">An optional closure to be invoked via pom.withXml { } to allow further customization</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html#publicationName" title="Property in GrailsPublishExtension">publicationName</a></span> - Property in <a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html">GrailsPublishExtension</a>
-</dt><dd> <div class="block">The name of the publication</div></dd>
+</dt><dd> <div class="block">The name of the publication. </div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html#publishTestSources" title="Property in GrailsPublishExtension">publishTestSources</a></span> - Property in <a href="org/apache/grails/gradle/publish/GrailsPublishExtension.html">GrailsPublishExtension</a>
 </dt><dd> <div class="block">Whether to publish test sources with a "tests" classifier</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/PublishType.html" title="Enum in org.apache.grails.gradle.publish">PublishType</a></span> - Enum in <a href="./org/apache/grails/gradle/publish/package-summary.html">org.apache.grails.gradle.publish</a>
@@ -400,6 +428,11 @@ if (location.href.indexOf('is-external=true') == -1) {
 </dt><dd> <div class="block"></div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#RELEASE_PUBLISH_TYPE_PROPERTY" title="Field in GrailsPublishGradlePlugin">RELEASE_PUBLISH_TYPE_PROPERTY</a></span> - Field in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
 </dt><dd> <div class="block"></div></dd>
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#requireNoDirectoryArtifacts(org.gradle.api.Project, java.lang.String, org.gradle.api.component.SoftwareComponent)" title="Method in GrailsPublishGradlePlugin">requireNoDirectoryArtifacts(org.gradle.api.Project, java.lang.String, org.gradle.api.component.SoftwareComponent)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block">A component built with addVariantsFromConfiguration includes the class and resource directory variants of the
+ configuration unless they are skipped. </div></dd>
+<dt><span class="strong"><a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html#resolvedVersions(org.gradle.api.Project, List<String>)" title="Method in GrailsPublishGradlePlugin">resolvedVersions(org.gradle.api.Project, List&lt;String&gt;)</a></span> - Method in <a href="org/apache/grails/gradle/publish/GrailsPublishGradlePlugin.html">GrailsPublishGradlePlugin</a>
+</dt><dd> <div class="block">The versions of the artifacts resolved by the named configurations, keyed by `group:name`</div></dd>
 <dt><span class="strong"><a href="org/apache/grails/gradle/publish/AdditionalPublication.html#runtimeClasspathName" title="Property in AdditionalPublication">runtimeClasspathName</a></span> - Property in <a href="org/apache/grails/gradle/publish/AdditionalPublication.html">AdditionalPublication</a>
 </dt><dd> <div class="block">The runtime classpath configuration used for version mapping and to resolve dependency
  versions in the pom; derived from the source set name by default</div></dd>
