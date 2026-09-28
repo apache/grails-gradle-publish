@@ -33,18 +33,22 @@ import javax.inject.Inject
 
 class GrailsPublishGradlePluginTest extends Specification {
 
-    def 'findProjectProperty reads the project itself but not its parent projects'() {
+    def 'findProjectProperty reads the project itself before its parent projects'() {
         given:
         def root = ProjectBuilder.builder().withName('root').build()
         def child = ProjectBuilder.builder().withName('child').withParent(root).build()
         root.extensions.extraProperties.set('githubSlug', 'from/root')
         root.extensions.extraProperties.set('onlyOnRoot', 'from/root')
         child.extensions.extraProperties.set('githubSlug', 'from/child')
+        child.version = '1.0.0-SNAPSHOT'
+        child.plugins.apply('groovy')
+        child.plugins.apply(GrailsPublishGradlePlugin)
+        GrailsPublishGradlePlugin plugin = child.plugins.getPlugin(GrailsPublishGradlePlugin)
 
-        expect:
-        GrailsPublishGradlePlugin.findProjectProperty(child, 'githubSlug') == 'from/child'
-        GrailsPublishGradlePlugin.findProjectProperty(child, 'onlyOnRoot') == null
-        GrailsPublishGradlePlugin.findProjectProperty(child, 'notSetAnywhere') == null
+        expect: 'the project itself wins; a parent is read explicitly (Gradle 10 removes the implicit lookup) when Isolated Projects is off'
+        plugin.findProjectProperty(child, 'githubSlug') == 'from/child'
+        plugin.findProjectProperty(child, 'onlyOnRoot') == 'from/root'
+        plugin.findProjectProperty(child, 'notSetAnywhere') == null
     }
 
     def 'a plugin extending this one can declare its own injected constructor'() {

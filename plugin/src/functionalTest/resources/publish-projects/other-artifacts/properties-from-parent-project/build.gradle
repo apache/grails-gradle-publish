@@ -33,9 +33,10 @@ allprojects {
     }
 }
 
-// not read by the plugin applied in the subproject, which must fail instead of silently using the default
+// read by the plugin applied in the subproject, with a warning: parent project properties are not available with
+// Isolated Projects, and Gradle 10 removes the implicit lookup that used to find them
 if (System.getenv('SET_PUBLISH_TYPE_ON_PARENT')) {
-    ext.snapshotPublishType = 'MAVEN_PUBLISH'
+    ext.snapshotPublishType = 'NEXUS_PUBLISH'
 }
 
 subprojects {

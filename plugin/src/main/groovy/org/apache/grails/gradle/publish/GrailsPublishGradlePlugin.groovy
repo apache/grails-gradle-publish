@@ -182,48 +182,51 @@ The credentials and connection url must be specified as a project property or an
 
 When using `NEXUS_PUBLISH`, either the property `signing.secretKeyRingFile` must be set to the path of the GPG keyring file or local gpg must be configured to sign artifacts.
 
-Note: properties are read from the root project's gradle.properties, the one in the Gradle user home, -P or ORG_GRADLE_PROJECT_ environment variables, or from the project applying this plugin: its own gradle.properties, or its build script before the plugin is applied. Properties set on parent projects, including in the gradle.properties of a parent project's directory, are not read.
+Note: properties are read as Gradle properties (the root project's gradle.properties, the Gradle user home, -P or ORG_GRADLE_PROJECT_ environment variables), from the project applying this plugin (its build script, before the plugin is applied), or from a parent project's build script; the last is reported and not available with Isolated Projects. or its build script before the plugin is applied. Properties set on parent projects, including in the gradle.properties of a parent project's directory, are not read.
 """
     }
 
     /**
-     * Finds a property set via `ext` on the given project itself, or a Gradle property.
+     * Finds a property set via `ext` on the given project, a Gradle property, or, failing both, a property set via
+     * `ext` on a parent project.
      *
-     * The project's own extra properties are checked first, so a value set in its build script overrides a Gradle property,
-     * as it does with {@link Project#findProperty}. Properties set on parent projects are deliberately not read: resolving
-     * them implicitly is removed in Gradle 10, and reading them explicitly is not allowed with Isolated Projects.
+     * The project's own extra properties are checked first, so a value set in its build script overrides a Gradle
+     * property, as it does with {@link Project#findProperty}. Parent projects are read explicitly rather than through
+     * that method: Gradle 10 removes its implicit lookup of parent project properties, and reading them at all is not
+     * allowed with Isolated Projects, so a value found on a parent is reported (builds enabling Isolated Projects have
+     * to declare the property on the project itself or as a Gradle property) and parents are not read when Isolated
+     * Projects is active.
+     *
+     * @param quietly log a parent lookup at info instead of warn, for properties every project of a build is expected
+     *                to inherit, such as `projectVersion`
      */
-    @PackageScope
-    static Object findProjectProperty(Project project, String name) {
+    Object findProjectProperty(Project project, String name, boolean quietly = false) {
         def extraProperties = project.extensions.extraProperties
         if (extraProperties.has(name)) {
             return extraProperties.get(name)
         }
-        project.providers.gradleProperty(name).orNull
-    }
-
-    /**
-     * Finds a property that silently falls back to a default when unset: the publish types to the default publish
-     * type, and the Nexus URLs to the Nexus plugin's oss.sonatype.org URLs. A value that is only set on a parent
-     * project, which is no longer read, would change where artifacts are published without notice, so fail the build
-     * instead, unless the environment variable read as a fallback is set.
-     */
-    private Object findPropertyWithSilentDefault(Project project, String name, String environmentVariable = null) {
-        Object value = findProjectProperty(project, name)
-        boolean environmentFallback = environmentVariable != null && System.getenv(environmentVariable)
-        // with Isolated Projects, parent projects cannot be inspected, and such builds never relied on reading them
-        if (value == null && !environmentFallback && !buildFeatures.isolatedProjects.active.get()) {
-            for (Project parent = project.parent; parent != null; parent = parent.parent) {
-                if (parent.extensions.extraProperties.has(name)) {
-                    String orEnvironmentVariable = environmentVariable ? ", or set the ${environmentVariable} environment variable" : ''
-                    throw new InvalidUserDataException("The property `${name}` is set on ${parent} but not on ${project}. " +
-                            'The Grails Publish plugin does not read properties from parent projects. ' +
-                            "Set `${name}` in the root project's gradle.properties, with -P${name}=..., or on ${project} " +
-                            "itself, in its gradle.properties or in its build script before applying the plugin${orEnvironmentVariable}.")
+        Object gradleProperty = project.providers.gradleProperty(name).orNull
+        if (gradleProperty != null) {
+            return gradleProperty
+        }
+        if (buildFeatures.isolatedProjects.active.get()) {
+            // parent projects cannot be inspected, and such builds never relied on reading them
+            return null
+        }
+        for (Project parent = project.parent; parent != null; parent = parent.parent) {
+            if (parent.extensions.extraProperties.has(name)) {
+                String message = 'Property `{}` of {} was read from {}. Declare it on the project itself, in its build script ' +
+                        'before applying the Grails Publish plugin, or as a Gradle property (gradle.properties, -P{}=..., ' +
+                        'ORG_GRADLE_PROJECT_{}): parent project properties cannot be read with Isolated Projects.'
+                if (quietly) {
+                    LOG.info(message, name, project, parent, name, name)
+                } else {
+                    LOG.warn(message, name, project, parent, name, name)
                 }
+                return parent.extensions.extraProperties.get(name)
             }
         }
-        value
+        null
     }
 
     @Override
@@ -232,11 +235,13 @@ Note: properties are read from the root project's gradle.properties, the one in 
         if (project.extensions.findByName('grailsPublish') == null) {
             project.extensions.create('grailsPublish', GrailsPublishExtension)
         }
-        project.extensions.getByType(GrailsPublishExtension).pluginDescriptor.convention(defaultPluginDescriptor(project))
+        GrailsPublishExtension extension = project.extensions.getByType(GrailsPublishExtension)
+        extension.githubSlug.convention(project.provider { findProjectProperty(project, 'githubSlug', true) as String })
+        extension.pluginDescriptor.convention(defaultPluginDescriptor(project))
         final ExtraPropertiesExtension extraPropertiesExtension = project.extensions.findByType(ExtraPropertiesExtension)
 
-        final Object snapshotPublishTypeProperty = findPropertyWithSilentDefault(project, SNAPSHOT_PUBLISH_TYPE_PROPERTY)
-        final Object releasePublishTypeProperty = findPropertyWithSilentDefault(project, RELEASE_PUBLISH_TYPE_PROPERTY)
+        final Object snapshotPublishTypeProperty = findProjectProperty(project, SNAPSHOT_PUBLISH_TYPE_PROPERTY)
+        final Object releasePublishTypeProperty = findProjectProperty(project, RELEASE_PUBLISH_TYPE_PROPERTY)
         PublishType snapshotPublishType = snapshotPublishTypeProperty != null ? PublishType.valueOf(snapshotPublishTypeProperty as String) : PublishType.MAVEN_PUBLISH
         PublishType releasePublishType = releasePublishTypeProperty != null ? PublishType.valueOf(releasePublishTypeProperty as String) : PublishType.NEXUS_PUBLISH
 
@@ -248,7 +253,7 @@ Note: properties are read from the root project's gradle.properties, the one in 
 
             LOG.lifecycle('Environment Variable `{}` detected - using variable instead of project version.', ENVIRONMENT_VARIABLE_BASED_RELEASE)
         } else {
-            String detectedVersion = (project.version == Project.DEFAULT_VERSION ? (findProjectProperty(project, 'projectVersion') ?: Project.DEFAULT_VERSION) : project.version) as String
+            String detectedVersion = (project.version == Project.DEFAULT_VERSION ? (findProjectProperty(project, 'projectVersion', true) ?: Project.DEFAULT_VERSION) : project.version) as String
             if (detectedVersion == Project.DEFAULT_VERSION) {
                 throw new InvalidUserDataException("Project ${project.name} has an unspecified version (neither `version` or the property `projectVersion` is defined). Release state cannot be determined.")
             }
@@ -321,9 +326,9 @@ Note: properties are read from the root project's gradle.properties, the one in 
 
 
         if (useNexusPublish) {
-            // only read by builds publishing through Nexus, so a Nexus URL left on a parent project doesn't fail other builds
-            final String nexusPublishUrl = findPropertyWithSilentDefault(project, 'nexusPublishUrl', 'NEXUS_PUBLISH_URL') ?: System.getenv('NEXUS_PUBLISH_URL') ?: ''
-            final String nexusPublishSnapshotUrl = findPropertyWithSilentDefault(project, 'nexusPublishSnapshotUrl', 'NEXUS_PUBLISH_SNAPSHOT_URL') ?: System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL') ?: ''
+            // only read by builds publishing through Nexus
+            final String nexusPublishUrl = findProjectProperty(project, 'nexusPublishUrl') ?: System.getenv('NEXUS_PUBLISH_URL') ?: ''
+            final String nexusPublishSnapshotUrl = findProjectProperty(project, 'nexusPublishSnapshotUrl') ?: System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL') ?: ''
             final String nexusPublishUsername = findProjectProperty(project, 'nexusPublishUsername') ?: System.getenv('NEXUS_PUBLISH_USERNAME') ?: ''
             final String nexusPublishPassword = findProjectProperty(project, 'nexusPublishPassword') ?: System.getenv('NEXUS_PUBLISH_PASSWORD') ?: ''
             final String nexusPublishStagingProfileId = findProjectProperty(project, 'nexusPublishStagingProfileId') ?: System.getenv('NEXUS_PUBLISH_STAGING_PROFILE_ID') ?: ''

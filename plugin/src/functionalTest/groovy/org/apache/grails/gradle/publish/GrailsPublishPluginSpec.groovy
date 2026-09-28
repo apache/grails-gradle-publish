@@ -1308,19 +1308,25 @@ tasks.named('javadoc', Javadoc) {
         pom.text.contains("<url>https://github.com/apache/grails-from-gradle-properties</url>")
     }
 
-    def "a publish type set only on a parent project fails the build"() {
+    def "a publish type set only on a parent project is used, with a warning"() {
         given:
         GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
         runner = addEnvironmentVariable("SET_PUBLISH_TYPE_ON_PARENT", "true", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+// the Nexus plugin must be applied to the root project before the subprojects are evaluated
+apply plugin: 'io.github.gradle-nexus.publish-plugin'
+"""
 
         when:
-        executeTask(":subproject:assemble", runner)
+        def result = executeTask(":subproject:assemble", ["--info"], runner)
 
-        then: 'instead of silently publishing with the default publish type'
-        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
-        bf.buildResult.output.contains("The property `snapshotPublishType` is set on root project 'properties-from-parent-project' but not on project ':subproject'.")
-        bf.buildResult.output.contains("Set `snapshotPublishType` in the root project's gradle.properties, with -PsnapshotPublishType=..., or on project ':subproject' itself")
-        bf.buildResult.output.contains("in its build script before applying the plugin.")
+        then: 'the parent value is honoured, as it was through the implicit lookup Gradle 10 removes'
+        assertTaskSuccess("assemble", result)
+        result.output.contains("Nexus Publish is enabled for project subproject")
+
+        and: 'the build is told to declare it where Isolated Projects can read it'
+        result.output.contains("Property `snapshotPublishType` of project ':subproject' was read from root project 'properties-from-parent-project'.")
+        result.output.contains("parent project properties cannot be read with Isolated Projects")
     }
 
     def "a gradle plugin project publishes through the pluginMaven publication - java-gradle-plugin applied first: #javaGradlePluginFirst"() {
@@ -1445,24 +1451,26 @@ publishing {
         !result.output.contains(":testClasses")
     }
 
-    def "a Nexus URL set only on a parent project fails a build publishing through Nexus"() {
+    def "a Nexus URL set only on a parent project is used by a build publishing through Nexus, with a warning"() {
         given:
         GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
         runner = setGradleProperty("snapshotPublishType", "NEXUS_PUBLISH", runner)
         new File(runner.projectDir, 'build.gradle') << """
+// the Nexus plugin must be applied to the root project before the subprojects are evaluated
+apply plugin: 'io.github.gradle-nexus.publish-plugin'
+
 ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
 """
 
         when:
-        executeTask(":subproject:assemble", runner)
+        def result = executeTask(":subproject:assemble", runner)
 
-        then: 'instead of the Nexus plugin falling back to oss.sonatype.org'
-        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
-        bf.buildResult.output.contains("The property `nexusPublishUrl` is set on root project 'properties-from-parent-project' but not on project ':subproject'.")
-        bf.buildResult.output.contains("in its build script before applying the plugin, or set the NEXUS_PUBLISH_URL environment variable.")
+        then:
+        assertTaskSuccess("assemble", result)
+        result.output.contains("Property `nexusPublishUrl` of project ':subproject' was read from root project 'properties-from-parent-project'.")
     }
 
-    def "a Nexus URL set on a parent project is ignored when the environment variable is set"() {
+    def "a Nexus URL set on a parent project takes precedence over the environment variable, as any property does"() {
         given:
         GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
         runner = setGradleProperty("snapshotPublishType", "NEXUS_PUBLISH", runner)
@@ -1479,6 +1487,7 @@ ext.nexusPublishUrl = 'https://other.example.invalid/service/local/'
 
         then:
         assertTaskSuccess("assemble", result)
+        result.output.contains("Property `nexusPublishUrl` of project ':subproject' was read from root project 'properties-from-parent-project'.")
     }
 
     def "a gradle plugin project without automated publishing keeps the maven publication"() {

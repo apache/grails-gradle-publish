@@ -148,10 +148,13 @@ Project properties are read from:
   variables
 - the project applying the plugin: its own `gradle.properties`, or `ext` in its build script before the plugin is applied
 
-Properties set on a parent project, via `ext` or in the `gradle.properties` of a parent project's directory, are not
-read. If `snapshotPublishType` or `releasePublishType` is only set on a parent project, or, in a build publishing
-through Nexus, `nexusPublishUrl` or `nexusPublishSnapshotUrl` without the matching environment variable, the build fails
-rather than silently falling back to a default, such as the Nexus plugin's oss.sonatype.org URLs.
+- a parent project's `ext`, as a fallback: Gradle 10 removes the implicit lookup of parent project properties that
+  used to find these, so the plugin reads them explicitly and reports it (at warn level, or info for `projectVersion`
+  and `githubSlug`, which every project of a build is expected to inherit). With Isolated Projects enabled, parent
+  projects cannot be read at all, so such builds must declare the properties on the project itself or as Gradle
+  properties.
+
+A property, from any of these, takes precedence over the matching environment variable.
 
 `MAVEN_PUBLISH` Environment Variables are:
 

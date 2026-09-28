@@ -165,11 +165,8 @@ class GrailsPublishExtension {
         this.objects = objects
         this.project = project
 
-        githubSlug = objects.property(String).convention(
-                project.provider {
-                    GrailsPublishGradlePlugin.findProjectProperty(project, 'githubSlug') as String
-                }
-        )
+        // the plugin replaces this convention with its full property lookup (build script and parent project ext)
+        githubSlug = objects.property(String).convention(project.providers.gradleProperty('githubSlug'))
         websiteUrl = objects.property(String).convention(project.provider {
             String githubSlug = githubSlug.getOrNull()
             githubSlug ? "https://github.com/$githubSlug" as String : null
