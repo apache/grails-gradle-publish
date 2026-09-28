@@ -182,7 +182,7 @@ The credentials and connection url must be specified as a project property or an
 
 When using `NEXUS_PUBLISH`, either the property `signing.secretKeyRingFile` must be set to the path of the GPG keyring file or local gpg must be configured to sign artifacts.
 
-Note: properties are read as Gradle properties (the root project's gradle.properties, the Gradle user home, -P or ORG_GRADLE_PROJECT_ environment variables), from the project applying this plugin (its build script, before the plugin is applied), or from a parent project's build script; the last is reported and not available with Isolated Projects. or its build script before the plugin is applied. Properties set on parent projects, including in the gradle.properties of a parent project's directory, are not read.
+Note: properties are read as Gradle properties (the root project's gradle.properties, the Gradle user home, -P or ORG_GRADLE_PROJECT_ environment variables), from the project applying this plugin (its build script, before the plugin is applied), or from a parent project's build script; the last is reported and not available with Isolated Projects.
 """
     }
 
@@ -200,6 +200,7 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
      * @param quietly log a parent lookup at info instead of warn, for properties every project of a build is expected
      *                to inherit, such as `projectVersion`
      */
+    @PackageScope
     Object findProjectProperty(Project project, String name, boolean quietly = false) {
         def extraProperties = project.extensions.extraProperties
         if (extraProperties.has(name)) {
@@ -1061,10 +1062,22 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
                     }
                 }
                 if (changed) {
-                    moduleFile.setText(JsonOutput.prettyPrint(JsonOutput.toJson(module)), 'UTF-8')
+                    moduleFile.setText(formatLikeGradle(JsonOutput.toJson(module)), 'UTF-8')
                 }
             }
         }
+    }
+
+    /**
+     * Pretty prints the JSON the way Gradle writes module metadata: two spaces per level (JsonOutput uses four) and
+     * a trailing newline, so a rewritten file only differs from an untouched one where a version was added.
+     */
+    protected static String formatLikeGradle(String json) {
+        String pretty = JsonOutput.prettyPrint(json)
+        pretty.readLines().collect { String line ->
+            int indent = line.length() - line.stripLeading().length()
+            (' ' * (indent.intdiv(2))) + line.stripLeading()
+        }.join('\n') + '\n'
     }
 
     /** The versions of the artifacts resolved by the named configurations, keyed by `group:name` */
