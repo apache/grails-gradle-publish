@@ -24,6 +24,7 @@ github:
         - id: sbglasius
           type: User
       wait_timer: 0
+      prevent_self_review: false
     docs:
       required_reviewers:
         - id: jdaugherty
@@ -35,6 +36,7 @@ github:
         - id: sbglasius
           type: User
       wait_timer: 0
+      prevent_self_review: false
     close:
       required_reviewers:
         - id: jdaugherty
@@ -46,6 +48,7 @@ github:
         - id: sbglasius
           type: User
       wait_timer: 0
+      prevent_self_review: false
 notifications:
   # GitHub related
   commits: commits@grails.apache.org
