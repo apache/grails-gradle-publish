@@ -39,6 +39,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "📝 Update Release Draft"
-        uses: release-drafter/release-drafter@e1247478eabc9f6d9cf5ec2b3547469b0e1d2767 # v7.3.1
+        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
