@@ -23,6 +23,7 @@ import groovy.json.JsonSlurper
 import groovy.namespace.QName
 import groovy.transform.CompileStatic
 import groovy.transform.PackageScope
+import io.github.gradlenexus.publishplugin.AbstractTransitionNexusStagingRepositoryTask
 import io.github.gradlenexus.publishplugin.InitializeNexusStagingRepository
 import io.github.gradlenexus.publishplugin.NexusPublishExtension
 import io.github.gradlenexus.publishplugin.NexusPublishPlugin
@@ -36,8 +37,14 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.XmlProvider
+import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.ConfigurationContainer
+import org.gradle.api.artifacts.ModuleVersionIdentifier
 import org.gradle.api.artifacts.PublishArtifact
-import org.gradle.api.artifacts.ResolvedArtifact
+import org.gradle.api.artifacts.result.DependencyResult
+import org.gradle.api.artifacts.result.ResolvedComponentResult
+import org.gradle.api.artifacts.result.ResolvedDependencyResult
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.artifacts.dsl.RepositoryHandler
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
@@ -63,6 +70,7 @@ import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.provider.SetProperty
+import org.gradle.api.specs.Spec
 import org.gradle.api.publish.PublicationContainer
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenArtifact
@@ -76,6 +84,9 @@ import org.gradle.api.publish.maven.MavenPomScm
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
 import org.gradle.api.publish.maven.tasks.AbstractPublishToMaven
+import org.gradle.api.publish.maven.tasks.GenerateMavenPom
+import org.gradle.api.publish.maven.tasks.PublishToMavenLocal
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.GroovySourceDirectorySet
@@ -94,8 +105,10 @@ import org.gradle.plugins.signing.SigningExtension
 import org.gradle.plugins.signing.SigningPlugin
 
 import javax.inject.Inject
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicReference
 
 import static org.gradle.api.plugins.BasePlugin.BUILD_GROUP
 
@@ -117,6 +130,11 @@ class GrailsPublishGradlePlugin implements Plugin<Project> {
     public static List<String> GRAILS_PLUGIN_IDS = ['org.apache.grails.gradle.grails-plugin', 'org.grails.grails-plugin'].asImmutable()
     public static String PLUGIN_DESCRIPTOR_PATH = 'META-INF/grails-plugin.xml'
     public static String MAIN_GROOVY_COMPILE_TASK = 'compileGroovy'
+    /** The default name of the repository `MAVEN_PUBLISH` publishes to; Gradle makes it unique when adding it */
+    public static String MAVEN_REPOSITORY_NAME = 'maven'
+
+    /** Set on the build once the Nexus staging repository transition tasks are marked, see apply */
+    private static final String NEXUS_TRANSITION_TASKS_MARKED = 'grailsPublishNexusTransitionTasksMarked'
 
     /**
      * Artifact types of the class and resource directory variants Gradle creates for a source set. The java
@@ -136,6 +154,12 @@ class GrailsPublishGradlePlugin implements Plugin<Project> {
     protected BuildFeatures getBuildFeatures() {
         throw new UnsupportedOperationException('Injected by Gradle')
     }
+
+    /**
+     * The resolved versions of each set of configurations, shared by the pom and the Gradle module metadata of a
+     * publication so that its configurations are resolved once. Gradle creates a plugin instance per project.
+     */
+    private final Map<List<String>, Provider<Map<String, String>>> resolvedVersionProviders = [:]
 
     static String createErrorMessage(String missingSetting) {
         return """No '$missingSetting' was specified. Please provide a valid publishing configuration. Example:
@@ -291,6 +315,7 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
         // Required for the pom always
         final PluginManager projectPluginManager = project.pluginManager
         projectPluginManager.apply(MavenPublishPlugin)
+        orderPublishTasksSharingCoordinates(project)
 
         boolean localSigning = false
         String signingKeyId = findProjectProperty(project, 'signing.keyId') ?: System.getenv('SIGNING_KEY')
@@ -351,6 +376,21 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
                 }
             }
 
+            // The close and release tasks of the Nexus publish plugin (2.0.0) cannot be stored in the configuration
+            // cache when they run without its publishing tasks, as in a release closing the staging repository in a
+            // separate build: their transition check options reach the Nexus extension, and through it the project.
+            // Marked as not compatible, Gradle runs such a build without storing a configuration cache entry instead
+            // of failing it. Builds running them with the publishing tasks store no entry either way, since the Nexus
+            // plugin configures its repository with explicit credentials. The marking is registered once per build,
+            // however many projects publish through Nexus.
+            ExtraPropertiesExtension buildProperties = project.gradle.extensions.extraProperties
+            if (!buildProperties.has(NEXUS_TRANSITION_TASKS_MARKED)) {
+                buildProperties.set(NEXUS_TRANSITION_TASKS_MARKED, true)
+                project.rootProject.tasks.withType(AbstractTransitionNexusStagingRepositoryTask).configureEach { AbstractTransitionNexusStagingRepositoryTask task ->
+                    task.notCompatibleWithConfigurationCache('The staging repository transition tasks of the Nexus publish plugin reference the project')
+                }
+            }
+
             if (!hasNexusPublishApplied) {
                 project.rootProject.extensions.configure(NexusPublishExtension) { NexusPublishExtension it ->
                     if (nexusPublishDescription) {
@@ -388,17 +428,25 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
                     System.setProperty('org.gradle.internal.publish.checksums.insecure', true as String)
 
                     pe.repositories { RepositoryHandler repoHandler ->
-                        repoHandler.maven { MavenArtifactRepository repo ->
-                            final String mavenPublishUsername = findProjectProperty(project, 'mavenPublishUsername') ?: System.getenv('MAVEN_PUBLISH_USERNAME')
-                            final String mavenPublishPassword = findProjectProperty(project, 'mavenPublishPassword') ?: System.getenv('MAVEN_PUBLISH_PASSWORD')
-                            if (mavenPublishUsername && mavenPublishPassword) {
+                        final String mavenPublishUsername = findProjectProperty(project, 'mavenPublishUsername') ?: System.getenv('MAVEN_PUBLISH_USERNAME')
+                        final String mavenPublishPassword = findProjectProperty(project, 'mavenPublishPassword') ?: System.getenv('MAVEN_PUBLISH_PASSWORD')
+                        boolean explicitCredentials = mavenPublishUsername && mavenPublishPassword
+                        MavenArtifactRepository mavenRepository = repoHandler.maven { MavenArtifactRepository repo ->
+                            repo.name = MAVEN_REPOSITORY_NAME
+                            repo.url = mavenPublishUrl
+                            if (explicitCredentials) {
+                                // explicit credentials: Gradle runs builds publishing with them without storing a
+                                // configuration cache entry
                                 repo.credentials { PasswordCredentials credentials ->
                                     credentials.username = mavenPublishUsername
                                     credentials.password = mavenPublishPassword
                                 }
                             }
-                            repo.url = mavenPublishUrl
-                            repo.name = 'maven'
+                        }
+                        // Adding the repository makes its name unique (e.g. maven2). Gradle reads credentials from
+                        // properties named after that final name, keeping publishing compatible with the configuration cache.
+                        if (!explicitCredentials && isHttpRepository(mavenRepository) && hasRepositoryCredentialProperties(project, mavenRepository.name)) {
+                            mavenRepository.credentials(PasswordCredentials)
                         }
 
                         def testRepoPath = gpe.testRepositoryPath.getOrNull()
@@ -653,37 +701,95 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
                 throw new InvalidUserDataException(createErrorMessage('developers'))
             }
 
-            pom.withXml { XmlProvider xml ->
-                Node pomNode = xml.asNode()
-
-                if (!project.extensions.findByType(JavaPlatformExtension)) {
-                    // Spring boot dependency management plugin will add the dependencyManagement section,
-                    // we do not want to publish this information as we will determine the specific versions
-                    // and set them instead
-                    NodeList dependencyManagement = (NodeList) pomNode.get('dependencyManagement')
-                    if (dependencyManagement) {
-                        dependencyManagement.replaceNode {}
+            // the action runs when the pom is generated, so it is given values and providers only: with the
+            // configuration cache, neither the project nor this extension is available then
+            boolean javaPlatform = project.extensions.findByType(JavaPlatformExtension) != null
+            Provider<Boolean> transitiveDependencies = gpe.transitiveDependencies
+            if (overridesProjectDependencyVersions()) {
+                // the deprecated hook a subclass overrides is still called, with the project, when the pom is generated
+                pom.withXml(new PomXmlAction(pom, javaPlatform, pomCustomization, project.provider { false },
+                        project.provider { [:] as Map<String, String> }))
+                pom.withXml { XmlProvider xml ->
+                    if (transitiveDependencies.get()) {
+                        setDependencyVersions(xml.asNode(), project, versionResolutionConfigurations)
                     }
                 }
-
-                if (pomCustomization.isPresent()) {
-                    Closure customization = pomCustomization.get()
-                    customization.delegate = pom
-                    customization.resolveStrategy = Closure.DELEGATE_FIRST
-                    customization.call(xml)
+                String pomTaskName = "generatePomFileFor${publication.name.capitalize()}Publication"
+                project.tasks.withType(GenerateMavenPom).configureEach { GenerateMavenPom task ->
+                    if (task.name == pomTaskName) {
+                        task.notCompatibleWithConfigurationCache("${getClass().name} overrides the deprecated setDependencyVersions(Node, Project, List), which reads the project when the pom is generated")
+                    }
                 }
-
-                // fix dependencies without a version, this can occur when the spring dependency management plugin is used
-                // disabling that plugin will cause gradle to fail on any unresolved, or by disabling the check with:
-                // https://github.com/gradle/gradle/issues/23030
-                //tasks.withType(GenerateModuleMetadata).configureEach {
-                //    suppressedValidationErrors.add('dependencies-without-versions')
-                //}
-                if (gpe.transitiveDependencies.get()) {
-                    setDependencyVersions(pomNode, project, versionResolutionConfigurations)
-                }
+            } else {
+                pom.withXml(new PomXmlAction(pom, javaPlatform, pomCustomization, transitiveDependencies,
+                        sharedResolvedVersionsProvider(project, transitiveDependencies, versionResolutionConfigurations)))
             }
         }
+    }
+
+    /**
+     * Whether a subclass overrides the deprecated {@link #setDependencyVersions(Node, Project, List)}, which the
+     * plugin then still calls instead of reading the versions from a provider.
+     */
+    private boolean overridesProjectDependencyVersions() {
+        for (Class<?> type = getClass(); type != null && type != GrailsPublishGradlePlugin; type = type.superclass) {
+            if (type.declaredMethods.any { Method method ->
+                method.name == 'setDependencyVersions' && method.parameterTypes.toList() == [Node, Project, List]
+            }) {
+                return true
+            }
+        }
+        false
+    }
+
+    /** The provider of the versions resolved by the configurations, shared by the publications using the same ones */
+    private Provider<Map<String, String>> sharedResolvedVersionsProvider(Project project, Provider<Boolean> enabled, List<String> configurationNames) {
+        List<String> key = new ArrayList<>(configurationNames)
+        Provider<Map<String, String>> provider = resolvedVersionProviders.get(key)
+        if (provider == null) {
+            provider = resolvedVersionsProvider(project, enabled, key)
+            resolvedVersionProviders.put(key, provider)
+        }
+        provider
+    }
+
+    /**
+     * With the configuration cache, the tasks of a project run in parallel. Publications with the same coordinates
+     * publish into the same location of a repository, so their publish tasks run one after the other (in the order of
+     * their names): otherwise the files of one publication could end up next to the signatures or checksums of the
+     * other.
+     */
+    protected static void orderPublishTasksSharingCoordinates(Project project) {
+        TaskContainer tasks = project.tasks
+        tasks.withType(AbstractPublishToMaven).configureEach { AbstractPublishToMaven task ->
+            // a live collection, filtered once the task graph is built and the publications are complete
+            task.mustRunAfter(tasks.withType(AbstractPublishToMaven).matching({ AbstractPublishToMaven other ->
+                other.name < task.name && publishSameTarget(task, other) && sameCoordinates(task.publication, other.publication)
+            } as Spec<AbstractPublishToMaven>))
+        }
+    }
+
+    private static boolean publishSameTarget(AbstractPublishToMaven task, AbstractPublishToMaven other) {
+        if (task instanceof PublishToMavenLocal) {
+            return other instanceof PublishToMavenLocal
+        }
+        task instanceof PublishToMavenRepository && other instanceof PublishToMavenRepository &&
+                ((PublishToMavenRepository) task).repository?.name == ((PublishToMavenRepository) other).repository?.name
+    }
+
+    private static boolean sameCoordinates(MavenPublication publication, MavenPublication other) {
+        publication != null && other != null && publication.groupId == other.groupId &&
+                publication.artifactId == other.artifactId && publication.version == other.version
+    }
+
+    private static boolean isHttpRepository(MavenArtifactRepository repository) {
+        repository.url?.scheme in ['http', 'https']
+    }
+
+    /** Whether the Gradle properties for the repository's final name are set */
+    private static boolean hasRepositoryCredentialProperties(Project project, String repositoryName) {
+        project.providers.gradleProperty("${repositoryName}Username").present &&
+                project.providers.gradleProperty("${repositoryName}Password").present
     }
 
     /**
@@ -801,7 +907,24 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
         }
     }
 
+    /**
+     * Sets the versions of the pom dependencies declared without one from the versions resolved by the named
+     * configurations of the project.
+     *
+     * @deprecated reads the project when the pom is generated, which the configuration cache does not allow; the
+     *             plugin itself uses {@link #setDependencyVersions(Node, Provider)}
+     */
+    @Deprecated
     protected void setDependencyVersions(Node pomNode, Project project, List<String> configurationNames) {
+        setDependencyVersions(pomNode, project.provider { resolvedVersions(project, configurationNames) })
+    }
+
+    /**
+     * Sets the versions of the pom dependencies declared without one.
+     *
+     * @param resolvedVersions the resolved versions, keyed by `group:name`; only queried when a dependency has no version
+     */
+    protected static void setDependencyVersions(Node pomNode, Provider<Map<String, String>> resolvedVersions) {
         def mavenPomNamespace = 'http://maven.apache.org/POM/4.0.0'
         def dependenciesQName = new QName(mavenPomNamespace, 'dependencies')
         def dependencyQName = new QName(mavenPomNamespace, 'dependency')
@@ -815,26 +938,19 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
         }
         NodeList dependencyNodes = (nodes.get(0) as Node).getAt(dependencyQName) as NodeList
 
-        LinkedHashSet<ResolvedArtifact> resolvedArtifacts = []
-        for (String configurationName : configurationNames) {
-            def configuration = project.configurations.findByName(configurationName)
-            if (configuration != null) {
-                resolvedArtifacts.addAll(configuration.resolvedConfiguration.resolvedArtifacts)
-            }
-        }
-
-        dependencyNodes.findAll { dependencyNode ->
+        List<Node> dependenciesWithoutVersion = dependencyNodes.findAll { dependencyNode ->
             NodeList versionNodes = (dependencyNode as Node)[versionQName] as NodeList
             return versionNodes.size() == 0 || (versionNodes.first() as Node).text().trim().isEmpty()
-        }.each { objectNode ->
-            def dependencyNode = objectNode as Node
+        } as List<Node>
+        if (dependenciesWithoutVersion.isEmpty()) {
+            return
+        }
+        Map<String, String> versions = resolvedVersions.get()
+        for (Node dependencyNode : dependenciesWithoutVersion) {
             def groupId = (dependencyNode[groupIdQName].first() as Node).text()
             def artifactId = (dependencyNode[artifactIdQName].first() as Node).text()
 
-            def managedVersion = resolvedArtifacts.find {
-                it.moduleVersion.id.group == groupId &&
-                        it.moduleVersion.id.name == artifactId
-            }?.moduleVersion?.id?.version
+            String managedVersion = versions["${groupId}:${artifactId}" as String]
             if (!managedVersion) {
                 throw new InvalidUserDataException("No version found for dependency $groupId:$artifactId.")
             }
@@ -1035,36 +1151,15 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
      * resolved classpaths the pom is completed from.
      */
     protected void configureModuleMetadataVersions(Project project, GrailsPublishExtension gpe, String publicationName, List<String> configurationNames) {
+        // the action runs when the module metadata is generated, so it is given values and providers only: with the
+        // configuration cache, neither the project nor this extension is available then
+        Provider<Boolean> transitiveDependencies = gpe.transitiveDependencies
+        Provider<Map<String, String>> resolvedVersions = sharedResolvedVersionsProvider(project, transitiveDependencies, configurationNames)
         project.tasks.withType(GenerateModuleMetadata).configureEach { GenerateModuleMetadata task ->
             if (task.publication.orNull?.name != publicationName) {
                 return
             }
-            task.doLast {
-                if (!gpe.transitiveDependencies.get()) {
-                    return
-                }
-                File moduleFile = task.outputFile.get().asFile
-                Map<String, String> resolvedVersions = resolvedVersions(project, configurationNames)
-                Map module = new JsonSlurper().parse(moduleFile, 'UTF-8') as Map
-                boolean changed = false
-                for (Map variant : (module.variants ?: []) as List<Map>) {
-                    for (Map dependency : (variant.dependencies ?: []) as List<Map>) {
-                        Map version = dependency.version as Map
-                        if (version?.requires || version?.strictly || version?.prefers) {
-                            continue
-                        }
-                        String resolved = resolvedVersions["${dependency.group}:${dependency.module}" as String]
-                        if (resolved == null) {
-                            throw new InvalidUserDataException("No version found for dependency ${dependency.group}:${dependency.module} of variant ${variant.name} in the module metadata of publication ${publicationName}.")
-                        }
-                        dependency.version = [requires: resolved]
-                        changed = true
-                    }
-                }
-                if (changed) {
-                    moduleFile.setText(formatLikeGradle(JsonOutput.toJson(module)), 'UTF-8')
-                }
-            }
+            task.doLast(new ModuleMetadataVersionsAction(publicationName, transitiveDependencies, resolvedVersions))
         }
     }
 
@@ -1080,18 +1175,90 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
         }.join('\n') + '\n'
     }
 
-    /** The versions of the artifacts resolved by the named configurations, keyed by `group:name` */
+    /**
+     * The versions of the components resolved by the named configurations, keyed by `group:name`. Nothing is resolved
+     * until the provider is queried, and nothing at all while `transitiveDependencies` is disabled; the configurations
+     * are resolved once, however often the provider is queried. A task action reads the versions through this provider
+     * instead of the project: with the configuration cache, the provider is evaluated when the cache entry is stored,
+     * and a build reusing the entry reads the stored versions. A dependency that cannot be resolved fails the query,
+     * and so the storing of the entry, rather than leaving its version out.
+     */
+    protected static Provider<Map<String, String>> resolvedVersionsProvider(Project project, Provider<Boolean> enabled, List<String> configurationNames) {
+        ConfigurationContainer configurations = project.configurations
+        List<String> names = new ArrayList<>(configurationNames)
+        AtomicReference<Map<String, String>> resolved = new AtomicReference<>()
+        project.provider {
+            if (!enabled.get()) {
+                return [:] as Map<String, String>
+            }
+            Map<String, String> versions = resolved.get()
+            if (versions == null) {
+                versions = resolvedVersions(configurations, names)
+                resolved.compareAndSet(null, versions)
+            }
+            versions
+        }
+    }
+
+    /** The versions of the components resolved by the named configurations, keyed by `group:name` */
     protected static Map<String, String> resolvedVersions(Project project, List<String> configurationNames) {
+        resolvedVersions(project.configurations, configurationNames)
+    }
+
+    /**
+     * The versions of the components resolved by the named configurations, keyed by `group:name`; for a module
+     * resolved by more than one of them, the version of the configuration listed first. Configurations that do not
+     * exist are skipped, and a dependency that cannot be resolved fails, as resolving the configuration's artifacts
+     * would.
+     */
+    protected static Map<String, String> resolvedVersions(ConfigurationContainer configurations, List<String> configurationNames) {
         Map<String, String> versions = [:]
         for (String configurationName : configurationNames) {
-            def configuration = project.configurations.findByName(configurationName)
+            Configuration configuration = configurations.findByName(configurationName)
             if (configuration != null) {
-                for (ResolvedArtifact artifact : configuration.resolvedConfiguration.resolvedArtifacts) {
-                    versions.putIfAbsent("${artifact.moduleVersion.id.group}:${artifact.moduleVersion.id.name}" as String, artifact.moduleVersion.id.version)
-                }
+                collectResolvedVersions(configuration, configuration.incoming.resolutionResult.rootComponent.get(), versions)
             }
         }
         versions
+    }
+
+    /**
+     * Adds the version of every component the root component depends on, directly or transitively, and fails on the
+     * dependencies that could not be resolved
+     */
+    private static void collectResolvedVersions(Configuration configuration, ResolvedComponentResult root, Map<String, String> versions) {
+        Set<ResolvedComponentResult> visited = [] as Set<ResolvedComponentResult>
+        List<UnresolvedDependencyResult> unresolved = []
+        Deque<ResolvedComponentResult> pending = new ArrayDeque<>()
+        pending.add(root)
+        while (!pending.isEmpty()) {
+            ResolvedComponentResult component = pending.poll()
+            for (DependencyResult dependency : component.dependencies) {
+                if (dependency instanceof UnresolvedDependencyResult) {
+                    unresolved << (UnresolvedDependencyResult) dependency
+                    continue
+                }
+                if (!(dependency instanceof ResolvedDependencyResult)) {
+                    continue
+                }
+                ResolvedComponentResult selected = ((ResolvedDependencyResult) dependency).selected
+                if (!visited.add(selected)) {
+                    continue
+                }
+                ModuleVersionIdentifier id = selected.moduleVersion
+                if (id != null) {
+                    versions.putIfAbsent("${id.group}:${id.name}" as String, id.version)
+                }
+                pending.add(selected)
+            }
+        }
+        if (unresolved) {
+            String dependencies = unresolved.collect { UnresolvedDependencyResult dependency ->
+                "${dependency.attempted.displayName}: ${dependency.failure.message}"
+            }.unique().join('\n  - ')
+            throw new GradleException("Could not resolve the versions to publish from ${configuration}:\n  - ${dependencies}",
+                    unresolved.first().failure)
+        }
     }
 
     protected String getDefaultClassifier() {
@@ -1233,5 +1400,131 @@ Note: properties are read as Gradle properties (the root project's gradle.proper
             }
         }
     }
-}
 
+    /**
+     * Completes the generated pom: removes the dependencyManagement section (unless the project is a platform),
+     * applies the pom customization, and fills in the versions of dependencies declared without one.
+     *
+     * The action is part of the state of the pom generation task, so it only holds values and providers, which keeps
+     * it compatible with the configuration cache. The versions are read from a provider, which the configuration
+     * cache evaluates when it stores the task.
+     */
+    @PackageScope
+    static class PomXmlAction implements Action<XmlProvider> {
+
+        private final MavenPom pom
+        private final boolean javaPlatform
+        private final Provider<Closure> pomCustomization
+        private final Provider<Boolean> transitiveDependencies
+        private final Provider<Map<String, String>> resolvedVersions
+
+        PomXmlAction(MavenPom pom, boolean javaPlatform, Provider<Closure> pomCustomization,
+                     Provider<Boolean> transitiveDependencies, Provider<Map<String, String>> resolvedVersions) {
+            this.pom = pom
+            this.javaPlatform = javaPlatform
+            this.pomCustomization = pomCustomization
+            this.transitiveDependencies = transitiveDependencies
+            this.resolvedVersions = resolvedVersions
+        }
+
+        @Override
+        void execute(XmlProvider xml) {
+            Node pomNode = xml.asNode()
+
+            if (!javaPlatform) {
+                // Spring boot dependency management plugin will add the dependencyManagement section,
+                // we do not want to publish this information as we will determine the specific versions
+                // and set them instead
+                NodeList dependencyManagement = (NodeList) pomNode.get('dependencyManagement')
+                if (dependencyManagement) {
+                    dependencyManagement.replaceNode {}
+                }
+            }
+
+            if (pomCustomization.isPresent()) {
+                Closure customization = pomCustomization.get()
+                customization.delegate = pom
+                customization.resolveStrategy = Closure.DELEGATE_FIRST
+                customization.call(xml)
+            }
+
+            // fill in the versions of dependencies declared without one, as the Spring dependency management plugin
+            // and platforms leave them, see https://github.com/gradle/gradle/issues/23030
+            if (transitiveDependencies.get()) {
+                setDependencyVersions(pomNode, resolvedVersions)
+            }
+        }
+    }
+
+    /**
+     * Fills in the versions the Gradle module metadata is missing, see
+     * {@link #configureModuleMetadataVersions(Project, GrailsPublishExtension, String, List)}.
+     *
+     * The action is part of the state of the module metadata task, so it only holds values and providers, which keeps
+     * it compatible with the configuration cache. The versions are read from a provider, which the configuration
+     * cache evaluates when it stores the task.
+     */
+    @PackageScope
+    static class ModuleMetadataVersionsAction implements Action<Task> {
+
+        private final String publicationName
+        private final Provider<Boolean> transitiveDependencies
+        private final Provider<Map<String, String>> resolvedVersions
+
+        ModuleMetadataVersionsAction(String publicationName, Provider<Boolean> transitiveDependencies,
+                                     Provider<Map<String, String>> resolvedVersions) {
+            this.publicationName = publicationName
+            this.transitiveDependencies = transitiveDependencies
+            this.resolvedVersions = resolvedVersions
+        }
+
+        @Override
+        void execute(Task task) {
+            if (!transitiveDependencies.get()) {
+                return
+            }
+            File moduleFile = ((GenerateModuleMetadata) task).outputFile.get().asFile
+            Map module = new JsonSlurper().parse(moduleFile, 'UTF-8') as Map
+            boolean changed = setModuleDependencyVersions(module, publicationName, resolvedVersions)
+            if (changed) {
+                moduleFile.setText(formatLikeGradle(JsonOutput.toJson(module)), 'UTF-8')
+            }
+        }
+    }
+
+    /**
+     * Sets the version of the dependencies of the Gradle module metadata that are declared without one, keeping any
+     * other constraint of their version, such as `rejects`.
+     *
+     * @param resolvedVersions the resolved versions, keyed by `group:name`; only queried when a dependency has no version
+     * @return whether a version was set
+     */
+    protected static boolean setModuleDependencyVersions(Map module, String publicationName, Provider<Map<String, String>> resolvedVersions) {
+        Map<String, String> versions = null
+        boolean changed = false
+        for (Map variant : (module.variants ?: []) as List<Map>) {
+            for (Map dependency : (variant.dependencies ?: []) as List<Map>) {
+                Map version = dependency.version as Map
+                if (version?.requires || version?.strictly || version?.prefers) {
+                    continue
+                }
+                if (versions == null) {
+                    versions = resolvedVersions.get()
+                }
+                String resolved = versions["${dependency.group}:${dependency.module}" as String]
+                if (!resolved) {
+                    throw new InvalidUserDataException("No version found for dependency ${dependency.group}:${dependency.module} of variant ${variant.name} in the module metadata of publication ${publicationName}.")
+                }
+                Map<String, Object> constraints = [requires: (Object) resolved]
+                version?.each { Object key, Object value ->
+                    if (key != 'requires') {
+                        constraints.put(key as String, value)
+                    }
+                }
+                dependency.version = constraints
+                changed = true
+            }
+        }
+        changed
+    }
+}

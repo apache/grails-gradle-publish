@@ -42,6 +42,7 @@ import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse
+import static com.github.tomakehurst.wiremock.client.WireMock.absent
 import static com.github.tomakehurst.wiremock.client.WireMock.get
 import static com.github.tomakehurst.wiremock.client.WireMock.post
 import static com.github.tomakehurst.wiremock.client.WireMock.put
@@ -53,8 +54,8 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options
 /**
  * A local Nexus endpoint, backed by WireMock, implementing the parts of the Sonatype staging REST API the
  * {@code io.github.gradle-nexus.publish-plugin} talks to (profiles, start / close / release a staging repository,
- * poll its state) plus the artifact upload endpoints of the staging and snapshot repositories. Every request must
- * carry the configured basic auth credentials.
+ * poll its state) plus the artifact upload endpoints of the staging and snapshot repositories. By default, every
+ * request must carry the configured basic auth credentials.
  *
  * The staging repository moves through {@code open}, {@code closed} and {@code released} as the build calls the
  * transition endpoints; uploads are kept in the request journal and can be read back with {@link #uploads}.
@@ -196,6 +197,16 @@ class MockNexus implements AutoCloseable {
     /** The files uploaded to the plain Maven repository, keyed by their path below the repository root */
     Map<String, byte[]> getMavenUploads() {
         uploads(MAVEN)
+    }
+
+    /** Also accepts requests without credentials at the plain Maven repository, leaving Nexus authentication intact */
+    void allowAnonymousMavenPublishing() {
+        server.stubFor(put(urlMatching("${MAVEN}/.*"))
+                .withHeader('Authorization', absent())
+                .willReturn(aResponse().withStatus(201)))
+        server.stubFor(get(urlMatching("${MAVEN}/.*"))
+                .withHeader('Authorization', absent())
+                .willReturn(aResponse().withStatus(404)))
     }
 
     /** The environment variables of a NEXUS_PUBLISH build targeting this server */

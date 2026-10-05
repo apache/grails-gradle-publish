@@ -162,6 +162,15 @@ A property, from any of these, takes precedence over the matching environment va
     MAVEN_PUBLISH_PASSWORD
     MAVEN_PUBLISH_URL
 
+The `MAVEN_PUBLISH` repository defaults to the name `maven`, so when `MAVEN_PUBLISH_USERNAME` and `MAVEN_PUBLISH_PASSWORD`
+(or the `mavenPublishUsername` and `mavenPublishPassword` properties) are not set, the credentials of an http or https repository
+can instead be given as the Gradle properties `mavenUsername` and `mavenPassword`, for example as the environment
+variables `ORG_GRADLE_PROJECT_mavenUsername` and `ORG_GRADLE_PROJECT_mavenPassword`. Gradle then reads them itself when it
+publishes, which, unlike `MAVEN_PUBLISH_USERNAME` and `MAVEN_PUBLISH_PASSWORD`, lets the build store a configuration
+cache entry. If a publishing repository already has that name, Gradle gives the new repository a unique name such as
+`maven2`; use the matching properties `maven2Username` and `maven2Password` in that case. Only properties matching the
+new repository's final name enable this credential lookup.
+
 `NEXUS_PUBLISH` Environment Variables are:
 
     NEXUS_PUBLISH_USERNAME
@@ -269,6 +278,37 @@ variants as `available-at` redirects to their own coordinates; those variants ca
 capability, so consumers that do not explicitly request the capability are unaffected. This component
 tree is also what allows Gradle to resolve a project dependency (including a self dependency such as
 `cliApi project(path)`) on a project with multiple publications.
+
+### Configuration Cache
+
+The plugin is compatible with the [configuration cache](https://docs.gradle.org/current/userguide/configuration_cache.html),
+publishing included. The versions written into the pom and the Gradle module metadata for dependencies declared without
+one (when `transitiveDependencies` is enabled, the default) are resolved when the configuration cache entry is stored,
+and a build reusing the entry publishes them without resolving the configurations again.
+
+The `pomCustomization` closure is stored with the task generating the pom, so it must only use its `XmlProvider`
+argument and the pom it is delegated to, not the project or other state of the build script. Read any other value it
+needs into a local variable beforehand, as the [bom](examples/bom/build.gradle) example does.
+
+With the configuration cache, the tasks of a project run in parallel. Publications with the same coordinates publish to
+the same location, so the plugin publishes them one after the other, to each repository.
+
+A dependency that cannot be resolved while the versions are resolved fails the build, and with the configuration cache
+storing the entry, so a temporary repository failure is never stored in an entry.
+
+Some builds still cannot store a configuration cache entry, because of the plugins this one works with:
+
+- Gradle does not store publishing tasks of a repository with explicit credentials, so builds publishing with the
+  `MAVEN_PUBLISH_USERNAME` and `MAVEN_PUBLISH_PASSWORD` credentials run without storing an entry; give them as the
+  `<repositoryName>Username` and `<repositoryName>Password` Gradle properties instead (normally `mavenUsername` and
+  `mavenPassword`, as described above). The Nexus publish plugin configures its repository with
+  explicit credentials, so builds publishing through Nexus do not store an entry either.
+- The close and release tasks of the Nexus publish plugin reference the project when they run without its publishing
+  tasks, as when a separate build closes the staging repository. This plugin marks them as not compatible with the
+  configuration cache, so such builds also run without storing an entry instead of failing.
+- The Spring dependency management plugin (`io.spring.dependency-management`) adds a pom customization referencing the
+  project to every Maven publication, even with `generatedPomCustomization` disabled. A build applying it has to
+  publish with `--no-configuration-cache`, or manage its versions with Gradle platforms instead.
 
 ### Release Signing
 

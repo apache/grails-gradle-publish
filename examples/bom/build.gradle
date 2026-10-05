@@ -54,10 +54,13 @@ grailsPublish {
     desc = 'A Bill of Materials published with the Grails Publish plugin'
     developers = [jdaugherty: 'James Daugherty']
 
-    // The generated pom can be post-processed; here the Groovy version is exposed as a Maven property
+    // The generated pom can be post-processed; here the Groovy version is exposed as a Maven property. The closure runs
+    // when the pom is generated, where the configuration cache gives it no access to the project, so the version is
+    // read beforehand into a local variable
+    String bomGroovyVersion = groovyVersion
     pomCustomization = { xml ->
         def root = xml.asNode()
         def properties = root.properties ? root.properties[0] : root.appendNode('properties')
-        properties.appendNode('groovy.version', groovyVersion)
+        properties.appendNode('groovy.version', bomGroovyVersion)
     }
 }

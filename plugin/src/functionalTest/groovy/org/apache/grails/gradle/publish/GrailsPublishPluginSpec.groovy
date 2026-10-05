@@ -19,6 +19,8 @@
 
 package org.apache.grails.gradle.publish
 
+import groovy.json.JsonSlurper
+import groovy.xml.XmlSlurper
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.UnexpectedBuildFailure
 import spock.lang.PendingFeature
@@ -1250,7 +1252,7 @@ tasks.named('javadoc', Javadoc) {
         runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
 
         when:
-        def result = executeTask("assemble", ["--configuration-cache"], runner)
+        def result = executeTask("assemble", runner)
 
         then: 'javadocJar is in the graph - `publish` alone would pass on the publication dependency'
         assertTaskSuccess("javadocJar", result)
@@ -1259,9 +1261,9 @@ tasks.named('javadoc', Javadoc) {
         new File(runner.projectDir, 'build/libs').listFiles().any { it.name.endsWith('-javadoc.jar') }
 
         when: 'the build runs again'
-        // CI runs with `org.gradle.configuration-cache=false`, so without this the jar's task state -
-        // the exclude spec and the providers it reads - is only ever exercised by hand
-        def cachedResult = executeTask("assemble", ["--configuration-cache"], runner)
+        // every build runs with the configuration cache (see GradleSpecification), so this build runs the jar's task
+        // state - the exclude spec and the providers it reads - as loaded from the stored entry
+        def cachedResult = executeTask("assemble", runner)
 
         then: 'the configuration cache entry is reusable'
         cachedResult.output.contains('Reusing configuration cache.')
@@ -1272,18 +1274,123 @@ tasks.named('javadoc', Javadoc) {
         GradleRunner runner = setupTestResourceProject('other-artifacts', 'test-sources')
 
         when:
-        def result = executeTask("testSourcesJar", ["--configuration-cache", "--configuration-cache-problems=fail"], runner)
+        def result = executeTask("testSourcesJar", runner)
 
         then: 'the onlyIf check runs without needing the project'
         assertTaskSuccess("testSourcesJar", result)
         findJarFileEntry("org/grails/example/MyProjectTest.class", new File(runner.projectDir, 'build/libs/test-sources-0.0.1-SNAPSHOT-tests.jar'))
 
         when: 'the build runs again'
-        def cachedResult = executeTask("testSourcesJar", ["--configuration-cache", "--configuration-cache-problems=fail", "--rerun-tasks"], runner)
+        def cachedResult = executeTask("testSourcesJar", ["--rerun-tasks"], runner)
 
         then: 'the configuration cache entry is reusable'
         cachedResult.output.contains('Reusing configuration cache.')
         assertTaskSuccess("testSourcesJar", cachedResult)
+    }
+
+    def "publishing reuses the configuration cache entry and still writes the platform managed versions"() {
+        given:
+        File repository = File.createTempDir("platform-managed-versions")
+        toCleanup << repository
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'platform-managed-versions')
+        runner = setGradleProperty("mavenPublishUrl", repository.absolutePath, runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+        String groovyVersion = System.getProperty('groovyVersion')
+
+        when: 'the first build stores the configuration cache entry'
+        def result = executeTask("publish", runner)
+
+        then:
+        result.output.contains('Configuration cache entry stored.')
+        assertTaskSuccess("generatePomFileForMavenPublication", result)
+        assertTaskSuccess("generateMetadataFileForMavenPublication", result)
+        managedVersions(repository) == [pom: groovyVersion, module: groovyVersion, moduleRejects: ['1.0.0'], mainModule: groovyVersion, inceptionYear: '2025']
+
+        when: 'the published files are removed and the build runs again from the stored entry'
+        repository.deleteDir()
+        repository.mkdirs()
+        def cachedResult = executeTask("publish", ["--rerun-tasks"], runner)
+
+        then: 'the pom and the module metadata are generated again, without the project'
+        cachedResult.output.contains('Configuration cache entry reused.')
+        assertTaskSuccess("generatePomFileForMavenPublication", cachedResult)
+        assertTaskSuccess("generateMetadataFileForMavenPublication", cachedResult)
+
+        and: 'the versions resolved when the entry was stored, and the pom customization, are in the published files'
+        managedVersions(repository) == [pom: groovyVersion, module: groovyVersion, moduleRejects: ['1.0.0'], mainModule: groovyVersion, inceptionYear: '2025']
+
+        and: 'the checksums of a Maven publish are still limited to md5 and sha1'
+        !new File(repository, 'org/grails/example/platform-managed-versions/0.0.1-SNAPSHOT').list().any {
+            it.endsWith('.sha256') || it.endsWith('.sha512')
+        }
+    }
+
+    /**
+     * The versions published for the test fixtures dependency on groovy-json, which only the plugin fills in (version
+     * mapping reads the main runtime classpath alone), and for the main dependency on groovy.
+     */
+    private static Map<String, Object> managedVersions(File repository) {
+        File[] files = new File(repository, 'org/grails/example/platform-managed-versions/0.0.1-SNAPSHOT').listFiles()
+        File pomFile = files.find { it.name.endsWith('.pom') }
+        File moduleFile = files.find { it.name.endsWith('.module') }
+
+        def pom = new XmlSlurper().parse(pomFile)
+        def module = new JsonSlurper().parse(moduleFile) as Map
+        List<Map> variants = module.variants as List<Map>
+        Map fixturesDependency = (variants.find { it.name == 'testFixturesApiElements' }.dependencies as List<Map>)
+                .find { it.module == 'groovy-json' }
+        Map mainDependency = (variants.find { it.name == 'runtimeElements' }.dependencies as List<Map>)
+                .find { it.module == 'groovy' }
+        [
+                pom          : pom.dependencies.dependency.find { it.artifactId.text() == 'groovy-json' }.version.text(),
+                module       : (fixturesDependency.version as Map)?.requires,
+                moduleRejects: (fixturesDependency.version as Map)?.rejects,
+                mainModule   : (mainDependency.version as Map)?.requires,
+                inceptionYear: pom.inceptionYear.text(),
+        ] as Map<String, Object>
+    }
+
+    def "a dependency that cannot be resolved fails storing the configuration cache entry, so a later build resolves it again"() {
+        given: 'a repository that does not have a dependency yet'
+        File repository = File.createTempDir("platform-managed-versions")
+        File lateRepository = File.createTempDir("late-repository")
+        toCleanup << repository << lateRepository
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'platform-managed-versions')
+        runner = setGradleProperty("mavenPublishUrl", repository.absolutePath, runner)
+        runner = setGradleProperty("lateRepositoryUrl", lateRepository.toURI().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        executeTask("generatePomFileForMavenPublication", runner)
+
+        then: 'the build fails with the resolution failure, and stores no entry'
+        UnexpectedBuildFailure failure = thrown(UnexpectedBuildFailure)
+        failure.buildResult.output.contains('Could not resolve the versions to publish from configuration')
+        failure.buildResult.output.contains('org.example:late:1.0')
+        !failure.buildResult.output.contains('No version found')
+        !failure.buildResult.output.contains('Configuration cache entry stored.')
+
+        when: 'the repository has the dependency'
+        File module = new File(lateRepository, 'org/example/late/1.0')
+        module.mkdirs()
+        new File(module, 'late-1.0.pom').text = """\
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>org.example</groupId>
+              <artifactId>late</artifactId>
+              <version>1.0</version>
+              <packaging>pom</packaging>
+            </project>""".stripIndent()
+        def result = executeTask("generatePomFileForMavenPublication", runner)
+
+        then: 'the next build configures again and generates the pom'
+        result.output.contains('Configuration cache entry stored.')
+        assertTaskSuccess("generatePomFileForMavenPublication", result)
+        new File(runner.projectDir, 'build/publications/maven/pom-default.xml').text.contains('<artifactId>late</artifactId>')
     }
 
     def "gradle properties are used by the plugin applied in a subproject"() {
