@@ -117,6 +117,77 @@ class PublishTargetsSpec extends ExampleProjectSpecification {
         !uploads.any { it.endsWith('.asc') }
     }
 
+    def "credentials from the #repositoryName Gradle properties publish with the configuration cache"() {
+        given: 'the repository url from the environment, and its credentials as Gradle properties'
+        MockNexus repository = startNexus('not used')
+        GradleRunner runner = setupExample(ARTIFACT_ID)
+        if (existingRepository) {
+            addExistingMavenRepository(runner)
+        }
+        runner = withEnvironment(runner, [
+                MAVEN_PUBLISH_URL: repository.mavenRepositoryUrl,
+        ])
+        runner = setGradleProperty("${repositoryName}Username", MockNexus.USERNAME, runner)
+        runner = setGradleProperty("${repositoryName}Password", MockNexus.PASSWORD, runner)
+        String publishTask = ":publishMavenPublicationTo${repositoryName.capitalize()}Repository"
+
+        when:
+        BuildResult result = run(runner, 'publish')
+
+        then: 'unlike explicit credentials, Gradle property credentials let the build store an entry'
+        result.output.contains('Configuration cache entry stored.')
+        result.task(publishTask).outcome == TaskOutcome.SUCCESS
+
+        and: 'every request carried the credentials and every artifact was uploaded'
+        repository.unmatchedRequests.isEmpty()
+        PUBLISHED_SUFFIXES.every { suffix -> hasUploadedArtifact(repository.mavenUploads.keySet(), ARTIFACT_ID, SNAPSHOT_VERSION, suffix) }
+
+        when: 'the build runs again'
+        BuildResult reused = run(runner, 'publish')
+
+        then: 'it publishes a second snapshot from the stored entry, still with the credentials'
+        reused.output.contains('Configuration cache entry reused.')
+        reused.task(publishTask).outcome == TaskOutcome.SUCCESS
+        repository.unmatchedRequests.isEmpty()
+        repository.mavenUploads.keySet().count { it ==~ /org\/grails\/example\/simple-library\/1\.0\.0-SNAPSHOT\/simple-library-1\.0\.0-\d{8}\.\d{6}-\d+\.jar/ } == 2
+
+        where:
+        existingRepository | repositoryName
+        false              | 'maven'
+        true               | 'maven2'
+    }
+
+    def "a renamed Maven repository publishes anonymously when only another repository has credential properties"() {
+        given:
+        MockNexus repository = startNexus('not used')
+        repository.allowAnonymousMavenPublishing()
+        GradleRunner runner = setupExample(ARTIFACT_ID)
+        addExistingMavenRepository(runner)
+        runner = withEnvironment(runner, [
+                MAVEN_PUBLISH_URL               : repository.mavenRepositoryUrl,
+                ORG_GRADLE_PROJECT_mavenUsername: 'other-deployer',
+                ORG_GRADLE_PROJECT_mavenPassword: 'other-password',
+        ])
+
+        when:
+        BuildResult result = run(runner, 'publish')
+
+        then: 'the maven properties do not require credentials for maven2'
+        result.task(':publishMavenPublicationToMaven2Repository').outcome == TaskOutcome.SUCCESS
+        result.output.contains('Configuration cache entry stored.')
+        repository.unmatchedRequests.isEmpty()
+        PUBLISHED_SUFFIXES.every { suffix -> hasUploadedArtifact(repository.mavenUploads.keySet(), ARTIFACT_ID, SNAPSHOT_VERSION, suffix) }
+
+        when:
+        BuildResult reused = run(runner, 'publish')
+
+        then:
+        reused.task(':publishMavenPublicationToMaven2Repository').outcome == TaskOutcome.SUCCESS
+        reused.output.contains('Configuration cache entry reused.')
+        repository.unmatchedRequests.isEmpty()
+        repository.mavenUploads.keySet().count { it ==~ /org\/grails\/example\/simple-library\/1\.0\.0-SNAPSHOT\/simple-library-1\.0\.0-\d{8}\.\d{6}-\d+\.jar/ } == 2
+    }
+
     def "a snapshot version publishes to the Nexus snapshot repository when snapshotPublishType is NEXUS_PUBLISH"() {
         given:
         MockNexus nexus = startNexus("org.grails.example:${ARTIFACT_ID}:${SNAPSHOT_VERSION}")
@@ -229,8 +300,10 @@ class PublishTargetsSpec extends ExampleProjectSpecification {
         when: 'the repository is closed by another build'
         BuildResult close = run(runner, '-x', 'initializeSonatypeStagingRepository', 'findSonatypeStagingRepository', 'closeSonatypeStagingRepository')
 
-        then:
+        then: 'the close task, marked as not compatible, runs without storing a configuration cache entry'
         close.task(':closeSonatypeStagingRepository').outcome == TaskOutcome.SUCCESS
+        close.output.contains('Configuration cache entry discarded')
+        !close.output.contains('Configuration cache entry stored.')
         nexus.stagingRepositoryState == 'closed'
 
         when: 'and released by yet another'
@@ -265,6 +338,9 @@ class PublishTargetsSpec extends ExampleProjectSpecification {
         result.task(':signMavenPublication').outcome == TaskOutcome.SUCCESS
         result.task(':publishMavenPublicationToMavenRepository').outcome == TaskOutcome.SUCCESS
         result.task(':initializeSonatypeStagingRepository') == null
+
+        and: 'the signing and publishing tasks of the release were stored in the configuration cache entry'
+        result.output.contains('Configuration cache entry stored.')
 
         and: 'the release and a verifiable signature of each artifact are in the repository'
         Path module = moduleDirectory(repository, ARTIFACT_ID, RELEASE_VERSION)
@@ -485,6 +561,14 @@ class PublishTargetsSpec extends ExampleProjectSpecification {
         List<String> files = publishedFileNames(moduleDirectory(mavenLocal, ARTIFACT_ID, RELEASE_VERSION))
         PUBLISHED_SUFFIXES.every { suffix -> files.contains("simple-library-${RELEASE_VERSION}${suffix}" as String) }
         !files.any { it.endsWith('.asc') }
+    }
+
+    private static void addExistingMavenRepository(GradleRunner runner) {
+        new File(runner.projectDir, 'build.gradle') << '''
+            publishing.repositories.maven {
+                url = layout.buildDirectory.dir('existing-repository')
+            }
+        '''.stripIndent()
     }
 
     private static List<String> signTasks(BuildResult result) {

@@ -106,7 +106,11 @@ class ContainerizedReleaseSpec extends ExampleProjectSpecification {
         ExecResult build = container.execInContainer(ExecConfig.builder()
                 .workDir('/project')
                 .envVars(environment)
-                .command((['gradle', '--no-daemon', '--stacktrace', '--init-script', '/init/local-plugin.init.gradle']
+                // the container has its own Gradle user home, so the configuration cache is requested here, as it is for
+                // the builds run by the test kit (see GradleSpecification). This build cannot store an entry, though: the
+                // Nexus plugin publishes with explicit credentials and its close task is marked as not compatible
+                .command((['gradle', '--no-daemon', '--stacktrace', '--configuration-cache',
+                           '--init-script', '/init/local-plugin.init.gradle']
                         + MockNexus.trustArgumentsFor('/keys/nexus-truststore.p12')
                         + ['publishToSonatype', 'closeSonatypeStagingRepository']) as String[])
                 .build())
@@ -115,6 +119,10 @@ class ContainerizedReleaseSpec extends ExampleProjectSpecification {
 
         then: 'the container signed with its gpg command and staged the release'
         build.exitCode == 0
+
+        and: 'Gradle ran the release without storing a configuration cache entry, instead of failing it'
+        build.stdout.contains('Configuration cache disabled because incompatible task was found.')
+        !build.stdout.contains('Configuration cache entry stored.')
         build.stdout.contains('Signing is enabled due to release configuration.')
         build.stdout.contains('No keyring file (SIGNING_KEYRING) has been specified. Assuming the use of local gpgCommand to sign instead.')
         build.stdout.contains('BUILD SUCCESSFUL')

@@ -20,6 +20,9 @@
 // Dependencies declared without a version, managed by a Gradle platform or by the Spring dependency management
 // plugin (as Grails plugins do). The published pom and Gradle module metadata carry the resolved versions, and
 // the dependencyManagement section the Spring plugin adds to the pom is removed.
+//
+// The Spring plugin's pom customization references the project, so publishing this project requires
+// --no-configuration-cache when the configuration cache is enabled.
 plugins {
     id 'java-library'
     id 'groovy'

@@ -20,6 +20,7 @@
 package org.apache.grails.gradle.publish
 
 import org.apache.grails.gradle.publish.examples.TestSigningKey
+import org.gradle.testkit.runner.BuildResult
 import org.gradle.testkit.runner.GradleRunner
 import spock.lang.Shared
 
@@ -65,9 +66,14 @@ class ReleaseSigningSpec extends GradleSpecification {
         }
 
         when:
-        executeTask('publish', ['publishToMavenLocal', "-Dmaven.repo.local=${mavenLocal.absolutePath}".toString()], runner)
+        BuildResult result = executeTask('publish', ['publishToMavenLocal', "-Dmaven.repo.local=${mavenLocal.absolutePath}".toString()], runner)
 
-        then:
+        then: 'publications with the same coordinates publish one after the other, to each target'
+        !sharedCoordinates || (
+                publishedBefore(result, 'publishMavenPublicationToMavenRepository', 'publishPluginMavenPublicationToMavenRepository') &&
+                        publishedBefore(result, 'publishMavenPublicationToMavenLocal', 'publishPluginMavenPublicationToMavenLocal'))
+
+        and:
         List<File> published = publishedFiles(repository)
         published
         published.findAll { !signatureVerifies(it) } == []
@@ -78,12 +84,19 @@ class ReleaseSigningSpec extends GradleSpecification {
         publishedLocally.findAll { !signatureVerifies(it) } == []
 
         where:
-        fixture                  | environment                              | description
-        'simple-project'         | [:]                                      | 'one publication'
-        'additional-publication' | [:]                                      | 'an additional publication'
-        'gradle-plugin-project'  | [:]                                      | 'Gradle plugin project, java-gradle-plugin applied last'
-        'gradle-plugin-project'  | [APPLY_JAVA_GRADLE_PLUGIN_FIRST: 'true'] | 'Gradle plugin project, java-gradle-plugin applied first'
-        'gradle-plugin-project'  | [PUBLISH_SHARED_ARTIFACTS: 'true']       | 'publications sharing artifacts'
+        fixture                  | environment                              | sharedCoordinates | description
+        'simple-project'         | [:]                                      | false             | 'one publication'
+        'additional-publication' | [:]                                      | false             | 'an additional publication'
+        'gradle-plugin-project'  | [:]                                      | false             | 'Gradle plugin project, java-gradle-plugin applied last'
+        'gradle-plugin-project'  | [APPLY_JAVA_GRADLE_PLUGIN_FIRST: 'true'] | false             | 'Gradle plugin project, java-gradle-plugin applied first'
+        'gradle-plugin-project'  | [PUBLISH_SHARED_ARTIFACTS: 'true']       | true              | 'publications sharing artifacts'
+    }
+
+    /** Whether the first task finished before the second started, using timestamps unaffected by console buffering */
+    private static boolean publishedBefore(BuildResult result, String first, String second) {
+        def firstEnd = result.output =~ /(?m)^PUBLISH-END ${first} (-?\d+)\r?$/
+        def secondStart = result.output =~ /(?m)^PUBLISH-START ${second} (-?\d+)\r?$/
+        firstEnd.find() && secondStart.find() && firstEnd.group(1).toLong() < secondStart.group(1).toLong()
     }
 
     def "a signed release publishes the grails-plugin.xml without signing it inside the classes directory"() {

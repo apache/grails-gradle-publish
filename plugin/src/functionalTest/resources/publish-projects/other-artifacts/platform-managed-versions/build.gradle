@@ -38,51 +38,46 @@ group = 'org.grails.example'
 
 apply plugin: 'java-library'
 apply plugin: 'groovy'
+apply plugin: 'java-test-fixtures'
 
 dependencies {
-    implementation "org.apache.groovy:groovy:$groovyVersion"
-}
+    // managed by a platform: Gradle's version mapping writes the version of the main variants
+    implementation platform("org.apache.groovy:groovy-bom:$groovyVersion")
+    implementation 'org.apache.groovy:groovy'
 
-// the java-gradle-plugin creates its own pluginMaven publication, which must be reused in either plugin order
-if (System.getenv('APPLY_JAVA_GRADLE_PLUGIN_FIRST')) {
-    apply plugin: 'java-gradle-plugin'
-}
-apply plugin: 'org.apache.grails.gradle.grails-publish'
-if (!System.getenv('APPLY_JAVA_GRADLE_PLUGIN_FIRST')) {
-    apply plugin: 'java-gradle-plugin'
-}
-
-gradlePlugin {
-    plugins {
-        example {
-            id = 'org.grails.example.gradle-plugin-project'
-            implementationClass = 'org.grails.example.MyProject'
+    // only on the test fixtures classpaths, which version mapping does not read: the Grails Publish plugin resolves
+    // the version written into the pom and the Gradle module metadata
+    testFixturesApi platform("org.apache.groovy:groovy-bom:$groovyVersion")
+    // the reject has to survive the version the plugin fills in
+    testFixturesApi('org.apache.groovy:groovy-json') {
+        version {
+            reject '1.0.0'
         }
     }
 }
 
+// a dependency from a repository that may not have it yet, see GrailsPublishPluginSpec
+if (findProperty('lateRepositoryUrl')) {
+    repositories {
+        maven { url = findProperty('lateRepositoryUrl') }
+    }
+    dependencies {
+        testFixturesApi 'org.example:late:1.0'
+    }
+}
+
+apply plugin: 'org.apache.grails.gradle.grails-publish'
 grailsPublish {
-    githubSlug = 'apache/grails-cores'
+    githubSlug = 'apache/grails-gradle-publish'
     license {
         name = 'Apache-2.0'
     }
-    title = 'Grails Gradle Plugin - Example Project'
-    desc = 'A testing project for the grails gradle plugin'
+    title = 'Platform Managed Versions'
+    desc = 'A project whose dependency versions are managed by a platform'
     developers = [
             jdaugherty: 'James Daugherty',
     ]
-}
-
-// publish the artifacts through a second publication as well, so the publications share them
-if (System.getenv('PUBLISH_SHARED_ARTIFACTS')) {
-    grailsPublish {
-        publicationName = 'maven'
-        addComponents = true
-    }
-
-    tasks.withType(org.gradle.api.publish.maven.tasks.AbstractPublishToMaven).configureEach { task ->
-        String taskName = task.name
-        task.doFirst { println "PUBLISH-START $taskName ${System.nanoTime()}" }
-        task.doLast { println "PUBLISH-END $taskName ${System.nanoTime()}" }
+    pomCustomization = { xml ->
+        xml.asNode().appendNode('inceptionYear', '2025')
     }
 }

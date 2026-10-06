@@ -291,8 +291,10 @@ class ExampleProjectsSpec extends ExampleProjectSpecification {
         GradleRunner runner = setupExample('managed-dependency-versions')
         runner = setGradleProperty('mavenPublishUrl', repository.toString(), runner)
 
-        when:
-        BuildResult result = run(runner, 'publish')
+        when: 'published without the configuration cache, which the dependency management plugin does not support here'
+        // io.spring.dependency-management adds its own pom customization to every Maven publication, even when
+        // generatedPomCustomization is disabled, and that action holds the project, so the pom task cannot be stored
+        BuildResult result = run(runner, '--no-configuration-cache', 'publish')
 
         then:
         result.task(':publishMavenPublicationToMavenRepository').outcome == TaskOutcome.SUCCESS
