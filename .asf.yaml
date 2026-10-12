@@ -55,6 +55,18 @@ github:
           type: User
       wait_timer: 0
       prevent_self_review: false
+  rulesets:
+    - name: "Default Branch Protection"
+      type: branch
+      branches:
+        includes:
+          - "~DEFAULT_BRANCH"
+          - "*.x"
+        excludes: []
+      bypass_teams:
+        - root
+      restrict_deletion: true
+      restrict_force_push: true
 notifications:
   # GitHub related
   commits: commits@grails.apache.org
