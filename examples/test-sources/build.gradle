@@ -1,0 +1,57 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+// Publishes the compiled test classes as an extra jar with the `tests` classifier, so other projects can
+// reuse test support classes (a common pattern for Grails test support modules).
+plugins {
+    id 'java-library'
+    id 'groovy'
+    id 'org.apache.grails.gradle.grails-publish'
+}
+
+version = projectVersion
+group = 'org.grails.example'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.apache.groovy:groovy:$groovyVersion"
+
+    testImplementation platform('org.spockframework:spock-bom:2.3-groovy-4.0')
+    testImplementation 'org.spockframework:spock-core'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+grailsPublish {
+    githubSlug = 'apache/grails-gradle-publish'
+    license {
+        name = 'Apache-2.0'
+    }
+    title = 'Test Sources'
+    desc = 'A library that also publishes its compiled test classes'
+    developers = [jdaugherty: 'James Daugherty']
+
+    publishTestSources = true
+}

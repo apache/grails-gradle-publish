@@ -28,6 +28,7 @@ import spock.lang.Specification
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.jar.JarFile
 
 abstract class GradleSpecification extends Specification {
 
@@ -38,6 +39,12 @@ abstract class GradleSpecification extends Specification {
     void setupSpec() {
         basePath = Files.createTempDirectory("gradle-projects")
         Path testKitDirectory = Files.createDirectories(basePath.resolve('.gradle'))
+        // The test kit directory is the Gradle user home of every build, so its gradle.properties win over those of
+        // the projects: every build runs with the configuration cache and fails on any configuration cache problem
+        testKitDirectory.resolve('gradle.properties').toFile().text = '''\
+            org.gradle.configuration-cache=true
+            org.gradle.configuration-cache.problems=fail
+            '''.stripIndent()
         gradleRunner = GradleRunner.create()
                 .withPluginClasspath()
                 .withTestKitDir(testKitDirectory.toFile())
@@ -120,7 +127,8 @@ abstract class GradleSpecification extends Specification {
     }
 
     protected BuildResult executeTask(String taskName, List<String> otherArguments = [], GradleRunner gradleRunner) {
-        List arguments = [taskName, "--stacktrace"]
+        // fail on deprecation warnings, so that anything removed in the next major Gradle version is caught early
+        List arguments = [taskName, "--stacktrace", "--warning-mode=fail"]
         arguments.addAll(otherArguments)
 
         gradleRunner.withArguments(arguments).forwardOutput().build()
@@ -154,6 +162,19 @@ abstract class GradleSpecification extends Specification {
 
         if (results.keySet().size() != 1) {
             throw new IllegalStateException("Unexpected Task failures: ${results.findAll { it.key != TaskOutcome.SUCCESS }}")
+        }
+    }
+
+    protected boolean findJarFileEntry(String path, File file) {
+        try (JarFile jarFile = new JarFile(file)) {
+            return jarFile.getEntry(path) != null
+        }
+    }
+
+    protected String readJarFileEntry(String path, File file) {
+        try (JarFile jarFile = new JarFile(file)) {
+            def entry = jarFile.getEntry(path)
+            return entry == null ? null : jarFile.getInputStream(entry).getText('UTF-8')
         }
     }
 }

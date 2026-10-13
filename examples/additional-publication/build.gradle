@@ -1,0 +1,124 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+import org.gradle.api.artifacts.PublishArtifact
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+import org.gradle.api.component.ConfigurationVariantDetails
+import org.gradle.api.component.SoftwareComponentFactory
+
+import javax.inject.Inject
+
+// One project publishing two coordinates: the library itself (`additional-publication`) and a companion
+// artifact built from the `cli` source set (`additional-publication-cli`) with its own dependency graph.
+plugins {
+    id 'java-library'
+    id 'groovy'
+    id 'org.apache.grails.gradle.grails-publish'
+}
+
+version = projectVersion
+group = 'org.grails.example'
+
+repositories {
+    mavenCentral()
+}
+
+sourceSets {
+    cli
+}
+
+// The cli source set is a feature variant of the library with its own capability
+java {
+    registerFeature('cli') {
+        usingSourceSet(sourceSets.cli)
+        capability(project.group.toString(), "${project.name}-cli", project.version.toString())
+    }
+}
+
+// Keep the cli variants out of the `java` component so the primary publication carries no trace of them
+components.java.withVariantsFromConfiguration(configurations.cliApiElements) { skip() }
+components.java.withVariantsFromConfiguration(configurations.cliRuntimeElements) { skip() }
+
+// Expose the cli variants as their own software component, named `cli`. The SoftwareComponentFactory can
+// only be injected into a plugin class, hence the small plugin.
+abstract class CliComponentPlugin implements Plugin<Project> {
+
+    @Inject
+    abstract SoftwareComponentFactory getSoftwareComponentFactory()
+
+    void apply(Project project) {
+        def cliComponent = softwareComponentFactory.adhoc('cli')
+        project.components.add(cliComponent)
+        cliComponent.addVariantsFromConfiguration(project.configurations.cliApiElements) {
+            CliComponentPlugin.publishJarsOnly(it, 'compile')
+        }
+        cliComponent.addVariantsFromConfiguration(project.configurations.cliRuntimeElements) {
+            CliComponentPlugin.publishJarsOnly(it, 'runtime')
+        }
+    }
+
+    // A configuration also carries secondary class and resource directory variants for local consumption; only the
+    // jar variant can be published, so skip the others (the java component does the same)
+    static void publishJarsOnly(ConfigurationVariantDetails details, String mavenScope) {
+        boolean directories = details.configurationVariant.artifacts.any { PublishArtifact artifact ->
+            artifact.type in [ArtifactTypeDefinition.JVM_CLASS_DIRECTORY, ArtifactTypeDefinition.JVM_RESOURCES_DIRECTORY, ArtifactTypeDefinition.DIRECTORY_TYPE]
+        }
+        if (directories) {
+            details.skip()
+        } else {
+            details.mapToMavenScope(mavenScope)
+        }
+    }
+}
+apply plugin: CliComponentPlugin
+
+// The feature variant's jar carries a `cli` classifier by default. The companion artifact is the primary jar of
+// its own coordinate, so publish it without a classifier (a classified jar would leave Maven consumers with a
+// pom-only artifact); the base name keeps the local file distinct from the library jar.
+tasks.named('cliJar', Jar) {
+    archiveBaseName = "${project.name}-cli"
+    archiveClassifier = ''
+}
+
+dependencies {
+    implementation "org.apache.groovy:groovy:$groovyVersion"
+
+    // the cli tier builds on the library itself...
+    cliApi project(path)
+    cliImplementation "org.apache.groovy:groovy:$groovyVersion"
+    // ...and has a dependency of its own that must not leak into the library's pom
+    cliImplementation 'org.apache.commons:commons-lang3:3.17.0'
+}
+
+grailsPublish {
+    githubSlug = 'apache/grails-gradle-publish'
+    license {
+        name = 'Apache-2.0'
+    }
+    title = 'Additional Publication'
+    desc = 'A library with a cli companion artifact published with the Grails Publish plugin'
+    developers = [jdaugherty: 'James Daugherty']
+
+    additionalPublication('cli') {
+        // Everything is optional and derived from the publication name:
+        //   artifactId = "${project.name}-cli", componentName = 'cli', sourceSetName = 'cli'
+        title = 'Additional Publication - CLI'
+        desc = 'The cli companion artifact of the additional-publication example'
+    }
+}

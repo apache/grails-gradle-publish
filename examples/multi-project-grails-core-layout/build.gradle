@@ -1,0 +1,57 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+// The layout of the grails-core build: the root build script applies the Grails Publish plugin to the published
+// subprojects from a name allow list. That happens before each subproject's own build script runs, so at that
+// point no component plugin (groovy, java-platform, java-gradle-plugin) is applied yet and no version is set; the
+// plugin falls back to the `projectVersion` Gradle property to decide between snapshot and release. Each subproject
+// then applies its own component plugin and `gradle/publish-conventions.gradle` configures the `grailsPublish`
+// extension the root created, the way a convention plugin would.
+plugins {
+    id 'org.apache.grails.gradle.grails-publish' apply false
+}
+
+// The Nexus publish plugin (used for releases) decides between staging and snapshot publishing from the
+// version of the root project, so the version has to be set here as well as in the subprojects
+// (https://github.com/gradle-nexus/publish-plugin/issues/310)
+version = projectVersion
+group = 'org.grails.example'
+
+def publishedProjects = [
+        'acme-core',
+        'acme-bom',
+        'acme-starter',
+        'acme-gradle-plugin',
+]
+
+subprojects {
+    if (name in publishedProjects) {
+        // Applied here, from the root project, so the Nexus publish plugin can still be applied to the root
+        apply plugin: 'org.apache.grails.gradle.grails-publish'
+    }
+}
+
+// Every subproject publishes to the `TestCaseMavenRepo` repository in build/local-maven (see
+// `testRepositoryPath` in gradle/publish-conventions.gradle). The plugin wires each subproject's
+// publishAllPublicationsToTestCaseMavenRepoRepository task into this root task, so one task publishes the
+// whole build for the functional tests of another build to consume.
+tasks.register('publishAllPublicationsToTestCaseMavenRepoRepository') {
+    group = 'publishing'
+    description = 'Publishes every subproject to the TestCaseMavenRepo repository.'
+}

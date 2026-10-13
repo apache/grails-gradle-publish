@@ -19,13 +19,14 @@
 
 package org.apache.grails.gradle.publish
 
+import groovy.json.JsonSlurper
+import groovy.xml.XmlSlurper
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.UnexpectedBuildFailure
 import spock.lang.PendingFeature
 
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.jar.JarFile
 
 class GrailsPublishPluginSpec extends GradleSpecification {
 
@@ -484,7 +485,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         projectDir.resolve('build.gradle').toFile().text = """
             buildscript {
                 repositories {
-                    maven { url "\${System.getenv('LOCAL_MAVEN_PATH')}\" }
+                    maven { url = System.getenv('LOCAL_MAVEN_PATH') }
                     maven { url = 'https://repo.grails.org/grails/restricted' }
                     maven { url = 'https://repository.apache.org/content/groups/snapshots' }
                 }
@@ -493,8 +494,8 @@ class GrailsPublishPluginSpec extends GradleSpecification {
                 }
             }
             
-            version "0.0.1-SNAPSHOT"
-            group "org.grails.example"
+            version = "0.0.1-SNAPSHOT"
+            group = "org.grails.example"
 
             apply plugin: 'java-library'
             apply plugin: 'groovy'
@@ -553,7 +554,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         projectDir.resolve('build.gradle').toFile().text = """
             buildscript {
                 repositories {
-                    maven { url "\${System.getenv('LOCAL_MAVEN_PATH')}\" }
+                    maven { url = System.getenv('LOCAL_MAVEN_PATH') }
                     maven { url = 'https://repo.grails.org/grails/restricted' }
                     maven { url = 'https://repository.apache.org/content/groups/snapshots' }
                 }
@@ -562,7 +563,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
                 }
             }
             
-            version "0.0.1"
+            version = "0.0.1"
             
             apply plugin: 'org.apache.grails.gradle.grails-publish'
         """
@@ -590,7 +591,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         projectDir.resolve('build.gradle').toFile().text = """
             buildscript {
                 repositories {
-                    maven { url "\${System.getenv('LOCAL_MAVEN_PATH')}\" }
+                    maven { url = System.getenv('LOCAL_MAVEN_PATH') }
                     maven { url = 'https://repo.grails.org/grails/restricted' }                    
                     maven { url = 'https://repository.apache.org/content/groups/snapshots' }
                 }
@@ -599,7 +600,7 @@ class GrailsPublishPluginSpec extends GradleSpecification {
                 }
             }
             
-            version "0.0.1"
+            version = "0.0.1"
             
             apply plugin: 'java'
             apply plugin: 'org.apache.grails.gradle.grails-publish'
@@ -773,12 +774,6 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         classesJar
         findJarFileEntry("TestJava.class", classesJar)
         findJarFileEntry("org/grails/example/MyProject.class", classesJar)
-    }
-
-    boolean findJarFileEntry(String path, File file) {
-        try (JarFile jarFile = new JarFile(file)) {
-            return jarFile.getEntry(path) != null
-        }
     }
 
     def "source artifact test - java already configured"() {
@@ -1123,5 +1118,522 @@ class GrailsPublishPluginSpec extends GradleSpecification {
         File classesJar = artifacts.find { it.name.endsWith(".jar") && !it.name.endsWith("javadoc.jar") && !it.name.endsWith("sources.jar") }
         classesJar
         findJarFileEntry("org/grails/example/MyProject.class", classesJar)
+    }
+
+    def "source artifact test - stale javadoc output is kept out of the javadoc jar"() {
+        given:
+        File tempDir = File.createTempDir("stale-javadoc-output")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'stale-javadoc-output')
+
+        and: 'the disabled javadoc task\'s destination directory still holds output from an earlier build'
+        String staleMarker = 'stale javadoc left behind by an earlier build'
+        File staleJavadocDir = new File(runner.projectDir, 'build/docs/javadoc')
+        new File(staleJavadocDir, 'removed').mkdirs()
+        // groovydoc generates a help-doc.html too, so this one collides
+        new File(staleJavadocDir, 'help-doc.html').text = staleMarker
+        // ... and this is a page for a class that no longer exists, which collides with nothing
+        new File(staleJavadocDir, 'removed/DeletedClass.html').text = staleMarker
+
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask("publish", ["--info"], runner)
+
+        then: 'the jar builds, even though a duplicate entry is a failure for it'
+        assertTaskSuccess("javadocJar", result)
+        assertTaskSuccess("groovydoc", result)
+        assertBuildSuccess(result, ["compileJava", "compileGroovy", "processResources", "classes", "jar", "groovydoc", "javadoc", "javadocJar", "sourcesJar", "grailsPublishValidation", "requireMavenPublishUrl", "generateMetadataFileForMavenPublication", "generatePomFileForMavenPublication", "publishMavenPublicationToMavenLocal", "publishToMavenLocal"])
+
+        and:
+        Path artifactDir = tempDir.toPath().resolve("org/grails/example/stale-javadoc-output/0.0.1-SNAPSHOT")
+        Files.exists(artifactDir)
+        File javadocJar = artifactDir.toFile().listFiles().find { it.name.endsWith("javadoc.jar") }
+        javadocJar
+
+        and: 'the groovydoc is packaged'
+        findJarFileEntry("org/grails/example/MyProject.html", javadocJar)
+        findJarFileEntry("DefaultPackage/TestJava.html", javadocJar)
+
+        and: 'nothing from the stale javadoc directory is'
+        !findJarFileEntry("removed/DeletedClass.html", javadocJar)
+        // groovydoc's own help-doc.html must still be there - asserting only that it is not the
+        // stale one would pass just as well on a jar that lost the entry altogether
+        readJarFileEntry("help-doc.html", javadocJar) != null
+        readJarFileEntry("help-doc.html", javadocJar) != staleMarker
+    }
+
+    def "source artifact test - a javadoc destinationDir above the groovydoc still yields a groovydoc-only jar"() {
+        given: 'a project that points javadoc at an ancestor of the groovydoc output directory'
+        File tempDir = File.createTempDir("stale-javadoc-output-ancestor")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'stale-javadoc-output')
+        new File(runner.projectDir, 'build.gradle') << """
+
+tasks.named('javadoc', Javadoc) {
+    destinationDir = file("\${layout.buildDirectory.get().asFile}/docs")
+}
+"""
+
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask("publish", ["--info"], runner)
+
+        then:
+        assertTaskSuccess("javadocJar", result)
+
+        and: 'the groovydoc is still packaged rather than filtered out along with the javadoc'
+        Path artifactDir = tempDir.toPath().resolve("org/grails/example/stale-javadoc-output/0.0.1-SNAPSHOT")
+        File javadocJar = artifactDir.toFile().listFiles().find { it.name.endsWith("javadoc.jar") }
+        javadocJar
+        findJarFileEntry("org/grails/example/MyProject.html", javadocJar)
+        findJarFileEntry("help-doc.html", javadocJar)
+
+        // the javadoc tree walks the groovydoc directory in this configuration; packaging its view of
+        // those files too would duplicate the whole groovydoc under a `groovydoc/` prefix
+        and: 'exactly once'
+        !findJarFileEntry("groovydoc/help-doc.html", javadocJar)
+        !findJarFileEntry("groovydoc/org/grails/example/MyProject.html", javadocJar)
+    }
+
+    def "source artifact test - stale javadoc output is kept out when withJavadocJar was already called"() {
+        given: 'a project that called withJavadocJar() itself before applying the plugin'
+        File tempDir = File.createTempDir("java-already-configured-stale")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'java-already-configured')
+
+        and: 'output an earlier build left in the disabled javadoc task\'s destination directory'
+        String staleMarker = 'stale javadoc left behind by an earlier build'
+        File staleJavadocDir = new File(runner.projectDir, 'build/docs/javadoc')
+        new File(staleJavadocDir, 'removed').mkdirs()
+        new File(staleJavadocDir, 'help-doc.html').text = staleMarker
+        new File(staleJavadocDir, 'removed/DeletedClass.html').text = staleMarker
+
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask("publish", ["--info"], runner)
+
+        then: 'the jar builds, even though a duplicate entry is a failure for it'
+        assertTaskSuccess("javadocJar", result)
+        assertTaskSuccess("groovydoc", result)
+
+        and:
+        Path artifactDir = tempDir.toPath().resolve("org/grails/example/java-already-configured/0.0.1-SNAPSHOT")
+        Files.exists(artifactDir)
+        File javadocJar = artifactDir.toFile().listFiles().find { it.name.endsWith("javadoc.jar") }
+        javadocJar
+
+        and: 'the groovydoc is packaged'
+        findJarFileEntry("org/grails/example/MyProject.html", javadocJar)
+
+        and: 'nothing from the stale javadoc directory is'
+        !findJarFileEntry("removed/DeletedClass.html", javadocJar)
+        readJarFileEntry("help-doc.html", javadocJar) != null
+        readJarFileEntry("help-doc.html", javadocJar) != staleMarker
+    }
+
+    def "assemble builds the javadoc jar for a groovy project"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'stale-javadoc-output')
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+
+        when:
+        def result = executeTask("assemble", runner)
+
+        then: 'javadocJar is in the graph - `publish` alone would pass on the publication dependency'
+        assertTaskSuccess("javadocJar", result)
+
+        and: 'and it lands in build/libs, where consumers of the built artifacts look for it'
+        new File(runner.projectDir, 'build/libs').listFiles().any { it.name.endsWith('-javadoc.jar') }
+
+        when: 'the build runs again'
+        // every build runs with the configuration cache (see GradleSpecification), so this build runs the jar's task
+        // state - the exclude spec and the providers it reads - as loaded from the stored entry
+        def cachedResult = executeTask("assemble", runner)
+
+        then: 'the configuration cache entry is reusable'
+        cachedResult.output.contains('Reusing configuration cache.')
+    }
+
+    def "testSourcesJar is compatible with the configuration cache"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'test-sources')
+
+        when:
+        def result = executeTask("testSourcesJar", runner)
+
+        then: 'the onlyIf check runs without needing the project'
+        assertTaskSuccess("testSourcesJar", result)
+        findJarFileEntry("org/grails/example/MyProjectTest.class", new File(runner.projectDir, 'build/libs/test-sources-0.0.1-SNAPSHOT-tests.jar'))
+
+        when: 'the build runs again'
+        def cachedResult = executeTask("testSourcesJar", ["--rerun-tasks"], runner)
+
+        then: 'the configuration cache entry is reusable'
+        cachedResult.output.contains('Reusing configuration cache.')
+        assertTaskSuccess("testSourcesJar", cachedResult)
+    }
+
+    def "publishing reuses the configuration cache entry and still writes the platform managed versions"() {
+        given:
+        File repository = File.createTempDir("platform-managed-versions")
+        toCleanup << repository
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'platform-managed-versions')
+        runner = setGradleProperty("mavenPublishUrl", repository.absolutePath, runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+        String groovyVersion = System.getProperty('groovyVersion')
+
+        when: 'the first build stores the configuration cache entry'
+        def result = executeTask("publish", runner)
+
+        then:
+        result.output.contains('Configuration cache entry stored.')
+        assertTaskSuccess("generatePomFileForMavenPublication", result)
+        assertTaskSuccess("generateMetadataFileForMavenPublication", result)
+        managedVersions(repository) == [pom: groovyVersion, module: groovyVersion, moduleRejects: ['1.0.0'], mainModule: groovyVersion, inceptionYear: '2025']
+
+        when: 'the published files are removed and the build runs again from the stored entry'
+        repository.deleteDir()
+        repository.mkdirs()
+        def cachedResult = executeTask("publish", ["--rerun-tasks"], runner)
+
+        then: 'the pom and the module metadata are generated again, without the project'
+        cachedResult.output.contains('Configuration cache entry reused.')
+        assertTaskSuccess("generatePomFileForMavenPublication", cachedResult)
+        assertTaskSuccess("generateMetadataFileForMavenPublication", cachedResult)
+
+        and: 'the versions resolved when the entry was stored, and the pom customization, are in the published files'
+        managedVersions(repository) == [pom: groovyVersion, module: groovyVersion, moduleRejects: ['1.0.0'], mainModule: groovyVersion, inceptionYear: '2025']
+
+        and: 'the checksums of a Maven publish are still limited to md5 and sha1'
+        !new File(repository, 'org/grails/example/platform-managed-versions/0.0.1-SNAPSHOT').list().any {
+            it.endsWith('.sha256') || it.endsWith('.sha512')
+        }
+    }
+
+    /**
+     * The versions published for the test fixtures dependency on groovy-json, which only the plugin fills in (version
+     * mapping reads the main runtime classpath alone), and for the main dependency on groovy.
+     */
+    private static Map<String, Object> managedVersions(File repository) {
+        File[] files = new File(repository, 'org/grails/example/platform-managed-versions/0.0.1-SNAPSHOT').listFiles()
+        File pomFile = files.find { it.name.endsWith('.pom') }
+        File moduleFile = files.find { it.name.endsWith('.module') }
+
+        def pom = new XmlSlurper().parse(pomFile)
+        def module = new JsonSlurper().parse(moduleFile) as Map
+        List<Map> variants = module.variants as List<Map>
+        Map fixturesDependency = (variants.find { it.name == 'testFixturesApiElements' }.dependencies as List<Map>)
+                .find { it.module == 'groovy-json' }
+        Map mainDependency = (variants.find { it.name == 'runtimeElements' }.dependencies as List<Map>)
+                .find { it.module == 'groovy' }
+        [
+                pom          : pom.dependencies.dependency.find { it.artifactId.text() == 'groovy-json' }.version.text(),
+                module       : (fixturesDependency.version as Map)?.requires,
+                moduleRejects: (fixturesDependency.version as Map)?.rejects,
+                mainModule   : (mainDependency.version as Map)?.requires,
+                inceptionYear: pom.inceptionYear.text(),
+        ] as Map<String, Object>
+    }
+
+    def "a dependency that cannot be resolved fails storing the configuration cache entry, so a later build resolves it again"() {
+        given: 'a repository that does not have a dependency yet'
+        File repository = File.createTempDir("platform-managed-versions")
+        File lateRepository = File.createTempDir("late-repository")
+        toCleanup << repository << lateRepository
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'platform-managed-versions')
+        runner = setGradleProperty("mavenPublishUrl", repository.absolutePath, runner)
+        runner = setGradleProperty("lateRepositoryUrl", lateRepository.toURI().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        executeTask("generatePomFileForMavenPublication", runner)
+
+        then: 'the build fails with the resolution failure, and stores no entry'
+        UnexpectedBuildFailure failure = thrown(UnexpectedBuildFailure)
+        failure.buildResult.output.contains('Could not resolve the versions to publish from configuration')
+        failure.buildResult.output.contains('org.example:late:1.0')
+        !failure.buildResult.output.contains('No version found')
+        !failure.buildResult.output.contains('Configuration cache entry stored.')
+
+        when: 'the repository has the dependency'
+        File module = new File(lateRepository, 'org/example/late/1.0')
+        module.mkdirs()
+        new File(module, 'late-1.0.pom').text = """\
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>org.example</groupId>
+              <artifactId>late</artifactId>
+              <version>1.0</version>
+              <packaging>pom</packaging>
+            </project>""".stripIndent()
+        def result = executeTask("generatePomFileForMavenPublication", runner)
+
+        then: 'the next build configures again and generates the pom'
+        result.output.contains('Configuration cache entry stored.')
+        assertTaskSuccess("generatePomFileForMavenPublication", result)
+        new File(runner.projectDir, 'build/publications/maven/pom-default.xml').text.contains('<artifactId>late</artifactId>')
+    }
+
+    def "gradle properties are used by the plugin applied in a subproject"() {
+        given:
+        File tempDir = File.createTempDir("properties-from-parent-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        when:
+        def result = executeTask(":subproject:publish", runner)
+
+        then: 'mavenPublishUrl is read from ORG_GRADLE_PROJECT_mavenPublishUrl'
+        assertTaskSuccess("publish", result)
+
+        and: 'githubSlug is read from the root gradle.properties'
+        File pom = tempDir.toPath().resolve("org/grails/example/subproject/0.0.1-SNAPSHOT").toFile()
+                .listFiles().find { it.name.endsWith(".pom") }
+        pom.text.contains("<url>https://github.com/apache/grails-from-gradle-properties</url>")
+    }
+
+    def "a publish type set only on a parent project is used, with a warning"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = addEnvironmentVariable("SET_PUBLISH_TYPE_ON_PARENT", "true", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+// the Nexus plugin must be applied to the root project before the subprojects are evaluated
+apply plugin: 'io.github.gradle-nexus.publish-plugin'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", ["--info"], runner)
+
+        then: 'the parent value is honoured, as it was through the implicit lookup Gradle 10 removes'
+        assertTaskSuccess("assemble", result)
+        result.output.contains("Nexus Publish is enabled for project subproject")
+
+        and: 'the build is told to declare it where Isolated Projects can read it'
+        result.output.contains("Property `snapshotPublishType` of project ':subproject' was read from root project 'properties-from-parent-project'.")
+        result.output.contains("parent project properties cannot be read with Isolated Projects")
+    }
+
+    def "a gradle plugin project publishes through the pluginMaven publication - java-gradle-plugin applied first: #javaGradlePluginFirst"() {
+        given:
+        File tempDir = File.createTempDir("gradle-plugin-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+        if (javaGradlePluginFirst) {
+            runner = addEnvironmentVariable("APPLY_JAVA_GRADLE_PLUGIN_FIRST", "true", runner)
+        }
+
+        when:
+        def result = executeTask("publish", runner)
+
+        then: 'only the pluginMaven publication and the plugin marker are published, not a second copy of the artifacts'
+        result.tasks*.path.findAll { it.startsWith(':publish') && it.endsWith('ToMavenRepository') }.toSet() == [
+                ':publishPluginMavenPublicationToMavenRepository',
+                ':publishExamplePluginMarkerMavenPublicationToMavenRepository',
+        ] as Set
+
+        and: 'the pluginMaven publication is configured by the plugin'
+        File pom = tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile()
+                .listFiles().find { it.name.endsWith(".pom") }
+        pom.text.contains("<description>A testing project for the grails gradle plugin</description>")
+
+        where:
+        javaGradlePluginFirst << [true, false]
+    }
+
+    def "a gradle plugin project publishes its test sources through the pluginMaven publication"() {
+        given:
+        File tempDir = File.createTempDir("gradle-plugin-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        and:
+        File testSource = new File(runner.projectDir, 'src/test/groovy/org/grails/example/MyProjectTest.groovy')
+        testSource.parentFile.mkdirs()
+        testSource.text = 'package org.grails.example\n\nclass MyProjectTest {}\n'
+        new File(runner.projectDir, 'build.gradle') << """
+grailsPublish {
+    publishTestSources = true
+}
+"""
+
+        when:
+        executeTask("publish", runner)
+
+        then:
+        File[] published = tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile().listFiles()
+        File testsJar = published.find { it.name.endsWith("-tests.jar") }
+        testsJar
+        findJarFileEntry("org/grails/example/MyProjectTest.class", testsJar)
+    }
+
+    def "a gradle plugin project fails clearly when it declares an additional publication"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        new File(runner.projectDir, 'build.gradle') << """
+grailsPublish {
+    additionalPublication('cli') {
+    }
+}
+"""
+
+        when:
+        executeTask("assemble", runner)
+
+        then:
+        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
+        bf.buildResult.output.contains("Additional publications are not supported for project `gradle-plugin-project`, since the java-gradle-plugin adds the java component to its `pluginMaven` publication")
+    }
+
+    def "a publication created by the build with the same name is not reused"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'simple-project')
+        new File(runner.projectDir, 'build.gradle') << """
+publishing {
+    publications {
+        maven(MavenPublication) {
+        }
+    }
+}
+"""
+
+        when:
+        executeTask("assemble", runner)
+
+        then:
+        UnexpectedBuildFailure bf = thrown(UnexpectedBuildFailure)
+        bf.buildResult.output.contains("Cannot add a Publication with name 'maven' as a Publication with that name already exists.")
+    }
+
+    def "publishing the grails-plugin.xml does not compile the tests"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'grails-plugin-project')
+        runner = setGradleProperty("projectVersion", "0.0.1-SNAPSHOT", runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+
+        and: 'a test class, and the grails-plugin.xml from an earlier build'
+        File testSource = new File(runner.projectDir, 'src/test/groovy/org/grails/example/MyProjectTest.groovy')
+        testSource.parentFile.mkdirs()
+        testSource.text = 'package org.grails.example\n\nclass MyProjectTest {}\n'
+        executeTask("classes", runner)
+
+        when:
+        def result = executeTask("publishToMavenLocal", ["--dry-run"], runner)
+
+        then: 'the extra artifact is published'
+        result.output.contains(":grailsPublishExtraArtifact SKIPPED")
+
+        and: 'the tests are not compiled, as publishTestSources is off'
+        !result.output.contains(":compileTestGroovy")
+        !result.output.contains(":testClasses")
+    }
+
+    def "a Nexus URL set only on a parent project is used by a build publishing through Nexus, with a warning"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = setGradleProperty("snapshotPublishType", "NEXUS_PUBLISH", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+// the Nexus plugin must be applied to the root project before the subprojects are evaluated
+apply plugin: 'io.github.gradle-nexus.publish-plugin'
+
+ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", runner)
+
+        then:
+        assertTaskSuccess("assemble", result)
+        result.output.contains("Property `nexusPublishUrl` of project ':subproject' was read from root project 'properties-from-parent-project'.")
+    }
+
+    def "a Nexus URL set on a parent project takes precedence over the environment variable, as any property does"() {
+        given:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        runner = setGradleProperty("snapshotPublishType", "NEXUS_PUBLISH", runner)
+        runner = addEnvironmentVariable("NEXUS_PUBLISH_URL", "https://nexus.example.invalid/service/local/", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+// the Nexus plugin must be applied to the root project before the subprojects are evaluated
+apply plugin: 'io.github.gradle-nexus.publish-plugin'
+
+ext.nexusPublishUrl = 'https://other.example.invalid/service/local/'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", runner)
+
+        then:
+        assertTaskSuccess("assemble", result)
+        result.output.contains("Property `nexusPublishUrl` of project ':subproject' was read from root project 'properties-from-parent-project'.")
+    }
+
+    def "a gradle plugin project without automated publishing keeps the maven publication"() {
+        given:
+        File tempDir = File.createTempDir("gradle-plugin-project")
+        toCleanup << tempDir
+
+        and:
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'gradle-plugin-project')
+        runner = setGradleProperty("mavenPublishUrl", tempDir.toPath().toAbsolutePath().toString(), runner)
+        runner = addEnvironmentVariable("GRAILS_PUBLISH_RELEASE", "false", runner)
+        new File(runner.projectDir, 'build.gradle') << """
+gradlePlugin {
+    automatedPublishing = false
+}
+"""
+
+        when:
+        def result = executeTask("publish", runner)
+
+        then: 'there is no pluginMaven publication, so the maven publication keeps its name and gets the java component'
+        result.tasks*.path.findAll { it.startsWith(':publish') && it.endsWith('ToMavenRepository') }.toSet() == [
+                ':publishMavenPublicationToMavenRepository',
+        ] as Set
+        tempDir.toPath().resolve("org/grails/example/gradle-plugin-project/0.0.1-SNAPSHOT").toFile()
+                .listFiles().any { it.name ==~ /gradle-plugin-project-0\.0\.1-[0-9.]+-[0-9]+\.jar/ }
+    }
+
+    def "a Nexus URL set on a parent project does not fail a build publishing with Maven"() {
+        given: 'a snapshot with the default publish type, which publishes with Maven'
+        GradleRunner runner = setupTestResourceProject('other-artifacts', 'properties-from-parent-project')
+        new File(runner.projectDir, 'build.gradle') << """
+ext.nexusPublishUrl = 'https://nexus.example.invalid/service/local/'
+"""
+
+        when:
+        def result = executeTask(":subproject:assemble", runner)
+
+        then:
+        assertTaskSuccess("assemble", result)
     }
 }

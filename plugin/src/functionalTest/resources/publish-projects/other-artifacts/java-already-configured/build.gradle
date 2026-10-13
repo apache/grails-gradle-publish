@@ -19,7 +19,7 @@
 
 buildscript {
     repositories {
-        maven { url "${System.getenv('LOCAL_MAVEN_PATH')}" }
+        maven { url = System.getenv('LOCAL_MAVEN_PATH') }
         maven { url = 'https://repo.grails.org/grails/restricted' }
     }
     dependencies {
@@ -59,4 +59,10 @@ grailsPublish {
     developers = [
             jdaugherty: 'James Daugherty',
     ]
+}
+
+// As apache/grails-core does for every jar it builds: a duplicate entry is a build failure,
+// not something to resolve silently.
+tasks.withType(Jar).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.FAIL
 }

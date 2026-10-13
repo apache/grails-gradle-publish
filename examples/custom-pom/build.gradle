@@ -1,0 +1,91 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+// Every pom related setting of the plugin, for a project that is not hosted on GitHub.
+plugins {
+    id 'java-library'
+    id 'groovy'
+    id 'org.apache.grails.gradle.grails-publish'
+}
+
+version = projectVersion
+group = 'org.grails.example'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.apache.groovy:groovy:$groovyVersion"
+}
+
+grailsPublish {
+    // Publish under coordinates that differ from the Gradle project's group and name
+    groupId = 'org.grails.example.custom'
+    artifactId = 'custom-pom-library'
+
+    // The name of the Maven publication (default `maven`): tasks are named after it, e.g.
+    // publishLibraryPublicationToMavenRepository
+    publicationName = 'library'
+
+    // Without a githubSlug every url is given explicitly
+    websiteUrl = 'https://example.org/custom-pom'
+    vcsUrl = 'https://git.example.org/custom-pom.git'
+    scmUrl = 'https://git.example.org/custom-pom'
+    scmUrlConnection = 'scm:git:https://git.example.org/custom-pom.git'
+    issueTrackerName = 'Jira'
+    issueTrackerUrl = 'https://issues.example.org/browse/CUSTOM'
+
+    // A license that is not one of the built-in names (Apache-2.0, MIT, BSD, EPL, GPL, LGPL, AGPL, CPL)
+    // needs a name and a url
+    license {
+        name = 'Example Public License 1.0'
+        url = 'https://example.org/license'
+    }
+
+    title = 'Custom Pom Library'
+    desc = 'Shows every pom setting the Grails Publish plugin supports'
+
+    // developers can be declared one by one with the full Maven developer model...
+    developer {
+        id = 'janedoe'
+        name = 'Jane Doe'
+        email = 'jane@example.org'
+        organization = 'Example Org'
+        roles = ['lead']
+    }
+    developer {
+        id = 'johndoe'
+        name = 'John Doe'
+    }
+    // ...instead of the shorthand `developers = [janedoe: 'Jane Doe', johndoe: 'John Doe']`
+
+    organization {
+        name = 'Example Org'
+        url = 'https://example.org'
+    }
+
+    // The generated pom can be post-processed with the usual `pom.withXml` API
+    pomCustomization = { xml ->
+        def root = xml.asNode()
+        root.appendNode('inceptionYear', '2024')
+        def properties = root.properties ? root.properties[0] : root.appendNode('properties')
+        properties.appendNode('example.build.tool', 'gradle')
+    }
+}

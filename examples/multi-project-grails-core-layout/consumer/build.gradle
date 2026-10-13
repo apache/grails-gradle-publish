@@ -1,0 +1,51 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+plugins {
+    id 'java-library'
+    // resolved through its plugin marker publication
+    id 'org.grails.example.acme'
+}
+
+dependencies {
+    // the BOM manages the framework versions...
+    implementation platform("org.grails.example:acme-bom:$publishedVersion")
+    // ...so the starter needs none; it brings acme-core and commons-lang3 along
+    implementation 'org.grails.example:acme-starter'
+    // the test fixtures variant of acme-core, selected by its capability
+    testImplementation testFixtures('org.grails.example:acme-core')
+}
+
+// always re-check snapshots so a freshly published build is picked up
+configurations.configureEach {
+    resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+}
+
+tasks.register('resolve') {
+    group = 'verification'
+    description = 'Prints the resolved runtime and test runtime classpaths.'
+    def classpaths = ['runtimeClasspath', 'testCompileClasspath', 'testRuntimeClasspath'].collectEntries {
+        [(it): configurations.named(it)]
+    }
+    doLast {
+        classpaths.each { String name, def classpath ->
+            println "${name}: ${classpath.get().files*.name.sort()}"
+        }
+    }
+}

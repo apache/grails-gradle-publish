@@ -1,0 +1,64 @@
+/*
+ *  Licensed to the Apache Software Foundation (ASF) under one
+ *  or more contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  The ASF licenses this file
+ *  to you under the Apache License, Version 2.0 (the
+ *  "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+// Each subproject applies and configures the Grails Publish plugin in its own build script.
+plugins {
+    // `apply false` puts the plugin, and the Nexus publish plugin it bundles, on the classpath of the root project
+    id 'org.apache.grails.gradle.grails-publish' apply false
+}
+
+// The Nexus publish plugin decides between staging and snapshot publishing from the version of the root project
+version = projectVersion
+group = 'org.grails.example'
+
+// Nexus publishing goes through the Nexus publish plugin, which must be applied to the root project before the
+// root project has been evaluated. When the Grails Publish plugin is applied from a subproject build script that
+// is too late, so the root project applies and configures the Nexus publish plugin itself whenever the build
+// publishes to Nexus. The Grails Publish plugin detects that it is already applied and leaves this configuration
+// alone. (When the plugin is applied from a `subprojects { }` block of the root build script, as in the
+// multi-project-root-configured example, none of this is needed.)
+//
+// The same rules as the Grails Publish plugin decide whether this build publishes to Nexus: releases do by
+// default, snapshots do when snapshotPublishType=NEXUS_PUBLISH
+String releaseVariable = System.getenv('GRAILS_PUBLISH_RELEASE')
+boolean isRelease = releaseVariable != null ? Boolean.parseBoolean(releaseVariable) : !projectVersion.endsWith('-SNAPSHOT')
+boolean publishesToNexus = isRelease ?
+        (findProperty('releasePublishType') ?: 'NEXUS_PUBLISH') == 'NEXUS_PUBLISH' :
+        (findProperty('snapshotPublishType') ?: 'MAVEN_PUBLISH') == 'NEXUS_PUBLISH'
+
+if (publishesToNexus) {
+    apply plugin: 'io.github.gradle-nexus.publish-plugin'
+
+    nexusPublishing {
+        repositoryDescription = System.getenv('NEXUS_PUBLISH_DESCRIPTION') ?: "${group}:${rootProject.name}:${version}"
+        repositories {
+            sonatype {
+                if (System.getenv('NEXUS_PUBLISH_URL')) {
+                    nexusUrl = uri(System.getenv('NEXUS_PUBLISH_URL'))
+                }
+                if (System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL')) {
+                    snapshotRepositoryUrl = uri(System.getenv('NEXUS_PUBLISH_SNAPSHOT_URL'))
+                }
+                username = System.getenv('NEXUS_PUBLISH_USERNAME')
+                password = System.getenv('NEXUS_PUBLISH_PASSWORD')
+                stagingProfileId = System.getenv('NEXUS_PUBLISH_STAGING_PROFILE_ID')
+            }
+        }
+    }
+}

@@ -16,8 +16,10 @@
 name: "CI"
 on:
   push:
+    # only the release lines build on push (and publish snapshots); every other branch builds through its pull request
     branches:
-      - '**'      # all branches
+      - 'main'
+      - '[0-9]+.[0-9]+.x'
     tags-ignore:
       - '**'   # ignore any tag ref
   pull_request:
@@ -47,7 +49,8 @@ jobs:
       - name: "🐘 Setup Gradle"
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
-          cache-provider: basic # 'basic' uses the MIT-licensed, open-source cache provider; the default 'enhanced' provider (v6+) is proprietary (Gradle commercial Terms of Use)
+          # Every push writes, so each release branch keeps its own entries; a pull request only reads its base branch's.
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
           develocity-access-key: ${{ secrets.GRAILS_DEVELOCITY_ACCESS_KEY }}
       - name: "🔨 Build Project (without tests)"
         if: ${{ contains(github.event.head_commit.message, '[skip tests]') }}
@@ -81,7 +84,8 @@ jobs:
       - name: "🐘 Setup Gradle"
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
-          cache-provider: basic # 'basic' uses the MIT-licensed, open-source cache provider; the default 'enhanced' provider (v6+) is proprietary (Gradle commercial Terms of Use)
+          # Every push writes, so each release branch keeps its own entries; a pull request only reads its base branch's.
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
           develocity-access-key: ${{ secrets.GRAILS_DEVELOCITY_ACCESS_KEY }}
       - name: "📤 Publish Snapshot Artifacts"
         env:

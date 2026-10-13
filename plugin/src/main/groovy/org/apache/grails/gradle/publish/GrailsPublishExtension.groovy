@@ -20,13 +20,14 @@ package org.apache.grails.gradle.publish
 
 import groovy.transform.CompileStatic
 import org.gradle.api.Action
+import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Project
 import org.gradle.api.file.Directory
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.publish.maven.MavenPomDeveloper
-import org.gradle.api.publish.maven.internal.publication.DefaultMavenPomDeveloper
 import org.gradle.api.tasks.Nested
 
 import javax.inject.Inject
@@ -117,14 +118,27 @@ class GrailsPublishExtension {
     final Property<Closure> pomCustomization
 
     /**
-     * If another process will add the components set this to false so only the publication is created
+     * If another process will add the components set this to false so only the publication is created.
+     * When the java-gradle-plugin adds the java component to its pluginMaven publication, only that component is left out.
      */
     final Property<Boolean> addComponents
 
     /**
-     * The name of the publication
+     * The name of the publication. Defaults to 'pluginMaven' when the java-gradle-plugin is applied with automated
+     * publishing, so its publication is configured instead of publishing the same artifacts a second time, and to
+     * 'maven' otherwise.
      */
     final Property<String> publicationName
+
+    /**
+     * The Grails plugin descriptor (META-INF/grails-plugin.xml) published as the extra `-plugin.xml` artifact.
+     * Defaults to the descriptor the Grails compiler writes into the main Groovy classes when the Grails plugin
+     * Gradle plugin is applied and a plugin class ({@code *GrailsPlugin.groovy}) exists, so the artifact is built
+     * together with the classes. A build producing the descriptor itself can set it from the producing task, e.g.
+     * {@code tasks.named('compileGroovy', GroovyCompile).flatMap { it.destinationDirectory.file('META-INF/grails-plugin.xml') }}.
+     * When unset, a descriptor that already exists in the compiled classes is still published.
+     */
+    final RegularFileProperty pluginDescriptor
 
     /**
      * If set, a local repository will be setup for the given path with the name 'TestCaseMavenRepo'. This can be useful
@@ -137,6 +151,12 @@ class GrailsPublishExtension {
      */
     final Property<Boolean> transitiveDependencies
 
+    /**
+     * Additional publications published alongside the primary publication, each under its own
+     * artifactId with its own dependency graph; registered via {@link #additionalPublication}
+     */
+    final List<AdditionalPublication> additionalPublications = []
+
     private ObjectFactory objects
     private Project project
 
@@ -145,11 +165,8 @@ class GrailsPublishExtension {
         this.objects = objects
         this.project = project
 
-        githubSlug = objects.property(String).convention(
-                project.provider {
-                    project.findProperty('githubSlug') as String
-                }
-        )
+        // the plugin replaces this convention with its full property lookup (build script and parent project ext)
+        githubSlug = objects.property(String).convention(project.providers.gradleProperty('githubSlug'))
         websiteUrl = objects.property(String).convention(project.provider {
             String githubSlug = githubSlug.getOrNull()
             githubSlug ? "https://github.com/$githubSlug" as String : null
@@ -186,10 +203,13 @@ class GrailsPublishExtension {
             project.group as String
         })
         publishTestSources = objects.property(Boolean).convention(false)
+        pluginDescriptor = objects.fileProperty()
         testRepositoryPath = objects.directoryProperty().convention(null as Directory)
         pomCustomization = objects.property(Closure).convention(null as Closure)
         addComponents = objects.property(Boolean).convention(true)
-        publicationName = objects.property(String).convention('maven')
+        publicationName = objects.property(String).convention(project.provider {
+            GrailsPublishGradlePlugin.isComponentAddedByJavaGradlePlugin(project, 'pluginMaven') ? 'pluginMaven' : 'maven'
+        })
         transitiveDependencies = objects.property(Boolean).convention(true)
         organization = objects.newInstance(Organization)
     }
@@ -243,5 +263,38 @@ class GrailsPublishExtension {
         action.execute(dev)
         developers.add(dev)
     }
-}
 
+    /**
+     * Registers an additional publication published alongside the primary publication under its
+     * own artifactId, built from a named software component (and source set for the sources &
+     * javadoc jars). By convention the component, source set, and classpath configuration names
+     * all derive from the publication name.
+     *
+     * @param name the publication name, e.g. 'cli'
+     * @param action the configurer
+     */
+    void additionalPublication(String name, Action<? super AdditionalPublication> action) {
+        Objects.requireNonNull(name, 'The additional publication name must not be null')
+        if (additionalPublications.any { it.name == name }) {
+            throw new InvalidUserDataException("An additional publication named `$name` is already registered.")
+        }
+
+        AdditionalPublication publication = new AdditionalPublication(name, objects, project, this)
+        action.execute(publication)
+        additionalPublications.add(publication)
+    }
+
+    /**
+     * Registers an additional publication
+     *
+     * @see #additionalPublication(String, Action)
+     */
+    void additionalPublication(String name, @DelegatesTo(value = AdditionalPublication, strategy = Closure.DELEGATE_FIRST) Closure configurer) {
+        Action<AdditionalPublication> action = { AdditionalPublication publication ->
+            configurer.delegate = publication
+            configurer.resolveStrategy = Closure.DELEGATE_FIRST
+            configurer.call(publication)
+        } as Action<AdditionalPublication>
+        additionalPublication(name, action)
+    }
+}
